@@ -22,6 +22,7 @@
  * Container
  * Reverse layout
  * Themes
+ * Custom
  */
 
 
@@ -79,7 +80,6 @@ html {
 .sidebar-about h1 {
   color: #fff;
   margin-top: 0;
-  font-family: "Abril Fatface", serif;
   font-size: 3.25rem;
 }
 
@@ -246,4 +246,19 @@ a.sidebar-nav-item:focus {
 .theme-base-0f .content a,
 .theme-base-0f .related-posts li a:hover {
   color: #8f5536;
+}
+
+
+
+/*
+ * Custom modifications
+ */
+
+.sidebar-about h1 img {
+  float: left;
+  margin-top: 1rem;
+}
+
+span.pagination-item {
+  visibility: hidden;
 }

@@ -8,11 +8,11 @@ title: projects
 
 [link](http://jtmpl.com)
 
-Jtmpl is a framework for building succint web applications.
+Jtmpl is a JavaScript framework for succint front-end applications.
 
 
 ### freak
 
 [link](https://github.com/atmin/freak)
 
-Freak is functional reactive object wrapper.
+Freak is functional reactive object wrapper which emerged from Jtmpl.

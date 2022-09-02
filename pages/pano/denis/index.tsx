@@ -1,46 +1,95 @@
-import { useEffect, useState } from "react";
-import equirectToCubemapFaces from "../../../hooks/useEquirectangularToCubeFaces";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-function loadImage(src: string, xo?: string) {
-  return new Promise(function (resolve, reject) {
-    var i = new Image();
-    if (xo) i.crossOrigin = xo;
-    i.onload = function () {
-      resolve(i);
-    };
-    i.onerror = reject;
-    i.src = src;
-  });
-}
+const PERSPECTIVE = 525;
 
 export default function Index() {
-  const [right, setRight] = useState<string>();
-  const [left, setLeft] = useState<string>();
-  const [top, setTop] = useState<string>();
-  const [bottom, setBottom] = useState<string>();
-  const [front, setFront] = useState<string>();
-  const [back, setBack] = useState<string>();
+  const viewerRef = useRef<HTMLDivElement>(null);
+
+  const [viewerWidth, setViewerWidth] = useState<number>();
+  const [viewerHeight, setViewerHeight] = useState<number>();
 
   useEffect(() => {
-    loadImage("/pano/denis/8k.avif").then((img: any) => {
-      const faces = equirectToCubemapFaces(img);
-      setRight(faces[0].toDataURL());
-      setLeft(faces[1].toDataURL());
-      setTop(faces[2].toDataURL());
-      setBottom(faces[3].toDataURL());
-      setFront(faces[4].toDataURL());
-      setBack(faces[5].toDataURL());
-    });
+    if (viewerRef.current) {
+      setViewerWidth(viewerRef.current.clientWidth);
+      setViewerHeight(viewerRef.current.clientHeight);
+    }
+  }, [viewerRef]);
+
+  const [x, setX] = useState<number>();
+  const [y, setY] = useState<number>();
+  const [yaw, setYaw] = useState<number>(0);
+  const [pitch, setPitch] = useState<number>(0);
+  const [isMoving, setIsMoving] = useState<boolean>(false);
+
+  const onMouseDown = useCallback((e: MouseEvent) => {
+    console.log("mousedown");
+    setX(e.pageX);
+    setY(e.pageY);
+    setIsMoving(true);
+    e.preventDefault();
   }, []);
 
+  const onMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (isMoving && viewerRef.current) {
+        const nextX = e.pageX;
+        const nextY = e.pageY;
+        const deltaX = nextX - x;
+        const deltaY = nextY - y;
+
+        console.log(`${deltaX}, ${deltaY}`);
+
+        setYaw((prevYaw) => {
+          const deltaYaw = (Math.atan2(deltaY, PERSPECTIVE) / Math.PI) * 180;
+          return Math.max(-90, Math.min(90, prevYaw + deltaYaw));
+        });
+
+        setPitch((prevPitch) => {
+          const deltaPitch = (-Math.atan2(deltaX, PERSPECTIVE) / Math.PI) * 180;
+          return (prevPitch + deltaPitch) % 360;
+        });
+      }
+    },
+    [isMoving, viewerRef, x, y]
+  );
+
+  const onMouseUp = useCallback((e: Event) => {
+    console.log("mouseup");
+    setIsMoving(false);
+    e.preventDefault();
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [onMouseDown, onMouseMove, onMouseUp]);
+
   return (
-    <picture>
-        <img src={right} alt="right" />
-        <img src={left} alt="left" />
-        <img src={top} alt="top" />
-        <img src={bottom} alt="bottom" />
-        <img src={front} alt="front" />
-        <img src={back} alt="back" />
-    </picture>
+    <div id="container">
+      <div id="viewer" ref={viewerRef}>
+        <div
+          id="cube"
+          style={{
+            transform: `translateZ(-150px) rotateX(${yaw}deg) rotateY(${pitch}deg)`,
+          }}
+        >
+          <picture>
+            <img src="/pano/denis/px.jpg" alt="right" className="right" />
+            <img src="/pano/denis/nx.jpg" alt="left" className="left" />
+            <img src="/pano/denis/py.jpg" alt="top" className="top" />
+            <img src="/pano/denis/ny.jpg" alt="bottom" className="bottom" />
+            <img src="/pano/denis/pz.jpg" alt="front" className="front" />
+            <img src="/pano/denis/nz.jpg" alt="back" className="back" />
+          </picture>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,4 +1,5 @@
-
+// Converts equirectangular projection to cube faces, but is slow to do on image load
+// Based on https://github.com/thomcc/equirect-to-cubemap-faces
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, v));

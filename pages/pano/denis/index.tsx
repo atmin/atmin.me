@@ -80,14 +80,14 @@ export default function Index() {
             transform: `translateZ(-150px) rotateX(${yaw}deg) rotateY(${pitch}deg)`,
           }}
         >
-          <picture>
+          
             <img src="/pano/denis/px.jpg" alt="right" className="right" />
             <img src="/pano/denis/nx.jpg" alt="left" className="left" />
             <img src="/pano/denis/py.jpg" alt="top" className="top" />
             <img src="/pano/denis/ny.jpg" alt="bottom" className="bottom" />
             <img src="/pano/denis/pz.jpg" alt="front" className="front" />
             <img src="/pano/denis/nz.jpg" alt="back" className="back" />
-          </picture>
+          
         </div>
       </div>
     </div>

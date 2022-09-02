@@ -34,7 +34,7 @@ export default function Home() {
           <span style={{ display: "inline-block" }}>Atanas Minev</span>
         </h1>
 
-        <p style={{ fontStyle: "italic" }}>presents</p>
+        <p style={{ fontStyle: "italic" }}>presents (very, VERY work in progress)</p>
 
         <div>
           <Link href="/pano/denis">

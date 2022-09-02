@@ -220,7 +220,7 @@ function equirectToCubemapFaces(
   image: { width: number },
   faceSize?: number,
   options?: any
-) {
+): HTMLCanvasElement[] {
   var inPixels = imageGetPixels(image);
 
   if (!faceSize) {

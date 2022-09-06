@@ -1,0 +1,81 @@
+==================================================================
+https://keybase.io/atmin
+--------------------------------------------------------------------
+
+I hereby claim:
+
+  * I am an admin of https://atmin.me
+  * I am atmin (https://keybase.io/atmin) on keybase.
+  * I have a public key with fingerprint 06A7 F329 1A15 C68B 310E  D752 EF90 6F97 1199 9FC9
+
+To do so, I am signing this object:
+
+{
+  "body": {
+    "key": {
+      "eldest_kid": "0101a6ccfb9ade8fc07936098f0f6b9f040d2d61ea31018627595640ee72292e26a70a",
+      "fingerprint": "06a7f3291a15c68b310ed752ef906f9711999fc9",
+      "host": "keybase.io",
+      "key_id": "ef906f9711999fc9",
+      "kid": "0101a6ccfb9ade8fc07936098f0f6b9f040d2d61ea31018627595640ee72292e26a70a",
+      "uid": "18392b285464c8e44a57be5fae88bc00",
+      "username": "atmin"
+    },
+    "merkle_root": {
+      "ctime": 1662445509,
+      "hash_meta": "06d69d0904a04480e1c2ce0ce527a8e0bd249030d386e71b20497db5bc2c560b",
+      "seqno": 23146567
+    },
+    "revoke": {
+      "sig_ids": [
+        "2531dd0f2983eba6cad52224ffc6b1c8ca76ad8a983a2d5bc511a924ef93e0890f"
+      ]
+    },
+    "service": {
+      "hostname": "atmin.me",
+      "protocol": "https:"
+    },
+    "type": "web_service_binding",
+    "version": 1
+  },
+  "ctime": 1662445510,
+  "expire_in": 157680000,
+  "prev": "1bc072c5f8f78246bc0ba946828d34e5e28da2bacf872f6865d12a824a2e2b05",
+  "seqno": 67,
+  "tag": "signature"
+}
+
+which yields the signature:
+
+-----BEGIN PGP MESSAGE-----
+Version: Keybase OpenPGP v2.1.13
+Comment: https://keybase.io/crypto
+
+yMKxAnicrZNtiFVFGMfvtr3oYrKUxiJSeNgv2sXmzJmZM3PLojcsolhyRdmuHWbO
+PHP3cPfecz3n7OoiG4SRS9nqhyDMQlgkRaF0/ZKEaMu2oLuKWGQv2ItrLItZBEYo
+Js25FEX0sfNlzsz8n+f5z++ZmbiztdDW8sn201c/ejuYa5kab/QXwntmJ7c4KtaD
+TmmLU4XmAH0a0iyoRtopOchFrmRhaJSQGrgJkS88hgQ3yDAlDCJIY81ckJ5VcoZ9
+KigjCMDHWGDATPpIOkXHRPUKJI0kqmd5WrtsPCxc6dKQcWWDQfsUgxGIGeG7rhDC
+hMIG9sZpHmHNKZnCyii2a3YSNO39h/5/9t3fTOdyT2CFOSWMhBwIkdRXQI0EzlWI
+UC5MIanLGli1zGpR3RkqOjVIqn0QJHGc5WTDLMr3XcYwIZQiYU8n096gBplsQtFM
+aCQQkYgQjsANcQgoBIp9yQEpjYlAHtIeZ+C7CiMifK2osjLKkLImUthYj50S9lzC
+KPOthQQG4irk1dOoYqGlTukFB1PP1RoZLLgHynKSmmKMiTEhU27IQ+kzqbm02xJr
+W4C6rhSYWNweIC6QcTYM5dWSgShsJs+79M/Tr7S/RaeRxFkcxn12tTfLGmkph5IN
+NnLZJlDBnwkCFdW1vR82YgCSNIrrFpJV/ouXi4oObG5ECQRRrqA+48h+eR0YyLtk
+W+FbFoYbn2PC7FRJQRjHXHsEKNhRYiVDw31sGGdUu1hapbQNV4j+DZD51qes2JyW
+Wl1m/Qk4Q+MnyrcWWtoKt992S/5wCm3z2/96Ts8G8wpHV7W/tKdx9MSC7dvuvXBk
+RmWb9n68d+OrrZfG3jiyZHastYjeCkvlnicuParu7hhbfGHF4l9uRnFHz8jYuavH
+ps/tmouXa/ziyXmj18ttm6/8zI/3LHjyMlyfeGbDseNf6t07zjQ6VnQOL7x/n1q/
+Nb6582t/1+8f/vSI/9V9v/621Ht851O7D89OP2dGp8yB97ZdW/XAumvf1V4Z/aaM
+zx8YXvrtZ8MHp0e6yUNb13edevDG8vlXgiVzXajSuaO8bGSm+vKZQVRZeNL7dNFj
+kxdrF5etfv35Q3vWjn9+x75ud6JTtH4hVlee7v7g4I+XycNZ143e/fvXTAY/vPn9
+ovZT5+96/+zMa/DuO1N/AE4yg1U=
+=Ey+l
+-----END PGP MESSAGE-----
+
+And finally, I am proving ownership of this host by posting or
+appending to this document.
+
+View my publicly-auditable identity here: https://keybase.io/atmin
+
+==================================================================

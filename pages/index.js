@@ -8,7 +8,10 @@ export default function Home() {
     <div style={{ padding: "0 2rem" }}>
       <Head>
         <title>atmin</title>
-        <meta name="description" content="Atanas Minev publishes interactive panoramas" />
+        <meta
+          name="description"
+          content="Atanas Minev publishes interactive panoramas"
+        />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
@@ -34,18 +37,76 @@ export default function Home() {
           <span style={{ display: "inline-block" }}>Atanas Minev</span>
         </h1>
 
-        <p style={{ fontStyle: "italic" }}>presents (very, VERY work in progress)</p>
+        <p></p>
+        <p></p>
+
+        {/* <p style={{ fontStyle: "italic" }}>presents (very, VERY work in progress)</p> */}
 
         <div>
-          <Link href="/pano/denis">
+          <Link href="/pano/2022-07-06-paralia-katerini">
             <section className="content-item">
               <picture>
                 <img
-                  src="/pano/denis/thumbnail.jpg"
-                  alt="Paralia Katerini, Greece. Above Denis hotel."
+                  src="/pano/2022-07-06-paralia-katerini/thumbnail.jpg"
+                  alt="Denis hotel. Paralia Katerini, Greece"
                 />
               </picture>
-              <p>Paralia Katerini, Greece. Above Denis hotel.</p>
+              <p>Denis hotel. Paralia Katerini, Greece</p>
+            </section>
+          </Link>
+          <Link href="/pano/2022-08-28-hotel-rodina">
+            <section className="content-item">
+              <picture>
+                <img
+                  src="/pano/2022-08-28-hotel-rodina/thumbnail.jpg"
+                  alt="Hotel Rodina. Sofia, Bulgaria"
+                />
+              </picture>
+              <p>Hotel Rodina. Sofia, Bulgaria</p>
+            </section>
+          </Link>
+          <Link href="/pano/2022-08-31-south-park">
+            <section className="content-item">
+              <picture>
+                <img
+                  src="/pano/2022-08-31-south-park/thumbnail.jpg"
+                  alt="South Park. Sofia, Bulgaria"
+                />
+              </picture>
+              <p>South Park. Sofia, Bulgaria</p>
+            </section>
+          </Link>
+          <Link href="/pano/2022-09-07-serdika-1">
+            <section className="content-item">
+              <picture>
+                <img
+                  src="/pano/2022-09-07-serdika-1/thumbnail.jpg"
+                  alt="Serdika District. Sofia, Bulgaria"
+                />
+              </picture>
+              <p>Serdika District. Sofia, Bulgaria</p>
+            </section>
+          </Link>
+          <Link href="/pano/2022-09-07-serdika-2">
+            <section className="content-item">
+              <picture>
+                <img
+                  src="/pano/2022-09-07-serdika-2/thumbnail.jpg"
+                  alt="Serdika District. Sofia, Bulgaria"
+                />
+              </picture>
+              <p>Serdika District. Sofia, Bulgaria</p>
+            </section>
+          </Link>{" "}
+          <Link href="/pano/2022-09-07-serdika-3">
+            <section className="content-item">
+              <picture>
+                <img
+                  src="/pano/2022-09-07-serdika-3/thumbnail.jpg"
+                  alt="Serdika District. Sofia, Bulgaria"
+                />
+              </picture>
+              <p>Serdika District. Sofia, Bulgaria</p>
             </section>
           </Link>
         </div>

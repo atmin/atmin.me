@@ -7,12 +7,21 @@ export default function Panorama({ imgUrl }: { imgUrl: string }) {
   useEffect(() => {
     if (ref.current) {
       import("marzipano").then((Marzipano) => {
-        const viewer = new Marzipano.Viewer(ref.current);
+        const viewer = new Marzipano.Viewer(ref.current, {
+          scrollZoom: true,
+        });
         const source = Marzipano.ImageUrlSource.fromString(imgUrl);
         const geometry = new Marzipano.EquirectGeometry([{ width: 4000 }]);
-        const limiter = Marzipano.RectilinearView.limit.traditional(
-          1024,
-          (100 * Math.PI) / 180
+        const limiter = Marzipano.util.compose(
+          Marzipano.RectilinearView.limit.vfov(
+            0.698131111111111,
+            2.09439333333333
+          ),
+          Marzipano.RectilinearView.limit.hfov(
+            0.698131111111111,
+            2.09439333333333
+          ),
+          Marzipano.RectilinearView.limit.pitch(-Math.PI / 2, Math.PI / 2)
         );
         const view = new Marzipano.RectilinearView({ yaw: Math.PI }, limiter);
         const scene = viewer.createScene({

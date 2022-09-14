@@ -109,6 +109,39 @@ export default function Home() {
               <p>Serdika District. Sofia, Bulgaria</p>
             </section>
           </Link>
+          <Link href="/pano/2022-09-13-yambol-1">
+            <section className="content-item">
+              <picture>
+                <img
+                  src="/pano/2022-09-13-yambol-1/thumbnail.jpg"
+                  alt="320m. Yambol, Bulgaria"
+                />
+              </picture>
+              <p>320m. Yambol, Bulgaria</p>
+            </section>
+          </Link>
+          <Link href="/pano/2022-09-13-yambol-2">
+            <section className="content-item">
+              <picture>
+                <img
+                  src="/pano/2022-09-13-yambol-2/thumbnail.jpg"
+                  alt="Above a school. Yambol, Bulgaria"
+                />
+              </picture>
+              <p>Above a school. Yambol, Bulgaria</p>
+            </section>
+          </Link>
+          <Link href="/pano/2022-09-14-kamen-vrah">
+            <section className="content-item">
+              <picture>
+                <img
+                  src="/pano/2022-09-14-kamen-vrah/thumbnail.jpg"
+                  alt="Somewhere in East Bulgaria"
+                />
+              </picture>
+              <p>Somewhere in East Bulgaria</p>
+            </section>
+          </Link>
         </div>
       </main>
 

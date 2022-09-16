@@ -43,7 +43,7 @@ export default function Home() {
         <p>🚧 Under construction.</p>
         <p>
           ℹ To view interactive panoramas, you need a browser, that supports AVIF format: recent Chrome, Firefox,
-          or iOS 16 Safari. There's no JPG fallback.
+          or iOS 16 Safari. There&apos;s no JPG fallback.
         </p>
 
         <p></p>

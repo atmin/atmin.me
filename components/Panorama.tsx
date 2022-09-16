@@ -1,15 +1,7 @@
 import { useEffect, useRef } from "react";
 
-export default function Panorama({
-  imgUrl,
-  moduleId,
-}: {
-  imgUrl?: string;
-  moduleId?: string;
-}) {
+export default function Panorama({ imgUrl }: { imgUrl: string }) {
   const ref = useRef<HTMLDivElement>();
-  const sourceUrl =
-    imgUrl || `/${moduleId.match(/(pano.*?)\.tsx?$/)[1]}/8k.avif`;
 
   useEffect(() => {
     if (ref.current) {
@@ -17,7 +9,7 @@ export default function Panorama({
         const viewer = new Marzipano.Viewer(ref.current, {
           scrollZoom: true,
         });
-        const source = Marzipano.ImageUrlSource.fromString(sourceUrl);
+        const source = Marzipano.ImageUrlSource.fromString(imgUrl);
         const geometry = new Marzipano.EquirectGeometry([{ width: 4000 }]);
         const limiter = Marzipano.util.compose(
           Marzipano.RectilinearView.limit.vfov(0.1, 2),
@@ -29,7 +21,7 @@ export default function Panorama({
         scene.switchTo();
       });
     }
-  }, [ref, sourceUrl]);
+  }, [ref, imgUrl]);
 
   return (
     <div

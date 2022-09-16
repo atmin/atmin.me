@@ -42,8 +42,14 @@ export default function Home() {
 
         <p>🚧 Under construction.</p>
         <p>
-          ℹ To view interactive panoramas, you need a browser, that supports AVIF format: recent Chrome, Firefox,
-          or iOS 16 Safari. There&apos;s no JPG fallback.
+          ℹ To view interactive panoramas, you need a browser, that supports
+          AVIF format: recent Chrome, Firefox, or iOS 16 Safari. There&apos;s no
+          JPG fallback.
+        </p>
+
+        <p>
+          💡 By default, panoramas are served in 8KiB x 4KiB resolution. To view
+          them in 16KiB x 8KiB (no iOS, Chrome only), append <code>?16</code> to the URL.
         </p>
 
         <p></p>

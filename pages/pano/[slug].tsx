@@ -1,9 +1,14 @@
 import fs from "fs/promises";
 import path from "path";
+import { useEffect, useState } from "react";
 import Panorama from "../../components/Panorama";
 
 function Pano() {
-  return <Panorama imgUrl="8k.avif" />;
+  const [resolution, setResolution] = useState<string>("8k");
+  useEffect(() => {
+    if (window.location.search === "?16") setResolution("16k");
+  }, [setResolution]);
+  return <Panorama imgUrl={`${resolution}.avif`} />;
 }
 
 export async function getStaticPaths() {

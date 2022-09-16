@@ -1,8 +1,15 @@
 import { useEffect, useRef } from "react";
-// import Marzipano from "marzipano";
 
-export default function Panorama({ imgUrl }: { imgUrl: string }) {
+export default function Panorama({
+  imgUrl,
+  moduleId,
+}: {
+  imgUrl?: string;
+  moduleId?: string;
+}) {
   const ref = useRef<HTMLDivElement>();
+  const sourceUrl =
+    imgUrl || `/${moduleId.match(/(pano.*?)\.tsx?$/)[1]}/8k.avif`;
 
   useEffect(() => {
     if (ref.current) {
@@ -10,30 +17,19 @@ export default function Panorama({ imgUrl }: { imgUrl: string }) {
         const viewer = new Marzipano.Viewer(ref.current, {
           scrollZoom: true,
         });
-        const source = Marzipano.ImageUrlSource.fromString(imgUrl);
+        const source = Marzipano.ImageUrlSource.fromString(sourceUrl);
         const geometry = new Marzipano.EquirectGeometry([{ width: 4000 }]);
         const limiter = Marzipano.util.compose(
-          Marzipano.RectilinearView.limit.vfov(
-            0.698131111111111,
-            2.09439333333333
-          ),
-          Marzipano.RectilinearView.limit.hfov(
-            0.698131111111111,
-            2.09439333333333
-          ),
+          Marzipano.RectilinearView.limit.vfov(0.1, 2),
+          Marzipano.RectilinearView.limit.hfov(0.1, 2),
           Marzipano.RectilinearView.limit.pitch(-Math.PI / 2, Math.PI / 2)
         );
         const view = new Marzipano.RectilinearView({ yaw: Math.PI }, limiter);
-        const scene = viewer.createScene({
-          source: source,
-          geometry: geometry,
-          view: view,
-          pinFirstLevel: true,
-        });
+        const scene = viewer.createScene({ source, geometry, view });
         scene.switchTo();
       });
     }
-  }, [ref, imgUrl]);
+  }, [ref, sourceUrl]);
 
   return (
     <div

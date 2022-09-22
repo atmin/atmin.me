@@ -155,6 +155,39 @@ export default function Home() {
               <p>Somewhere in East Bulgaria</p>
             </section>
           </Link>
+          <Link href="/pano/2022-09-22-bansko-1">
+            <section className="content-item">
+              <picture>
+                <img
+                  src="/pano/2022-09-22-bansko-1/thumbnail.jpg"
+                  alt="Bansko, Bulgaria"
+                />
+              </picture>
+              <p>Bansko, Bulgaria</p>
+            </section>
+          </Link>
+          <Link href="/pano/2022-09-22-bansko-2">
+            <section className="content-item">
+              <picture>
+                <img
+                  src="/pano/2022-09-22-bansko-2/thumbnail.jpg"
+                  alt="Bansko, Bulgaria"
+                />
+              </picture>
+              <p>Bansko, Bulgaria</p>
+            </section>
+          </Link>
+          <Link href="/pano/2022-09-22-bansko-3">
+            <section className="content-item">
+              <picture>
+                <img
+                  src="/pano/2022-09-22-bansko-3/thumbnail.jpg"
+                  alt="Bansko, Bulgaria"
+                />
+              </picture>
+              <p>Bansko, Bulgaria</p>
+            </section>
+          </Link>
         </div>
       </main>
 

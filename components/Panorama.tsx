@@ -1,84 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import createRegl, { Regl, Texture2D } from "regl";
-
-const FRAGMENT_SHADER = `
-  precision mediump float;
-  uniform sampler2D texture;
-  uniform vec4 color;
-
-  // Passed from vertex shader
-  varying vec2 textureCoords;
-
-  void main() {
-    gl_FragColor = color;
-  }
-`;
-
-const VERTEX_SHADER = `
-  attribute vec2 position;
-  void main() {
-    gl_Position = vec4(position, 0, 1);
-  }
-`;
+import { useEffect, useRef } from "react";
 
 export default function Panorama({ imgUrl }: { imgUrl: string }) {
-  const canvas = useRef<HTMLCanvasElement>();
-  const [regl, setRegl] = useState<Regl>();
-  const [panoTexture, setPanoTexture] = useState<Texture2D>();
+  const ref = useRef<HTMLDivElement>();
 
-  // Start from little planet view
-  const [fov, setFov] = useState<number>(180);
-  const [yaw, setYaw] = useState<number>(0);
-  const [pitch, setPitch] = useState<number>(0);
-
-  const drawPano = useMemo(
-    () =>
-      regl?.({
-        frag: FRAGMENT_SHADER,
-        vert: VERTEX_SHADER,
-        attributes: {
-          position: [
-            [0, -1],
-            [-1, 0],
-            [1, 1],
-          ],
-        },
-        uniforms: {
-          // @ts-ignore
-          color: regl?.prop("color"),
-        },
-        count: 3,
-      }),
-    [regl]
-  );
-
-  // Initialize regl on canvas
   useEffect(() => {
-    if (!canvas.current) return;
-    setRegl(() => createRegl(canvas.current));
-  }, [canvas]);
-
-  // Load panorama texture
-  useEffect(() => {
-    if (!regl) return;
-    const img = new Image();
-    img.src = imgUrl;
-    img.onload = () => setPanoTexture(regl.texture(img));
-  }, [regl, imgUrl]);
-
-  // Draw panorama texture on canvas
-  useEffect(() => {
-    if (!regl) return;
-    regl.clear({
-      color: [0, 0.5, 0.3, 1],
-      depth: 1,
-    });
-    drawPano({ color: [1, 0, 1, 1] });
-  }, [regl, drawPano, yaw, pitch]);
+    if (ref.current) {
+      import("marzipano").then((Marzipano) => {
+        const viewer = new Marzipano.Viewer(ref.current, {
+          scrollZoom: true,
+        });
+        const source = Marzipano.ImageUrlSource.fromString(imgUrl);
+        const geometry = new Marzipano.EquirectGeometry([{ width: 4000 }]);
+        const limiter = Marzipano.util.compose(
+          Marzipano.RectilinearView.limit.vfov(0.1, 2),
+          Marzipano.RectilinearView.limit.hfov(0.1, 2),
+          Marzipano.RectilinearView.limit.pitch(-Math.PI / 2, Math.PI / 2)
+        );
+        const view = new Marzipano.RectilinearView({ yaw: Math.PI }, limiter);
+        const scene = viewer.createScene({ source, geometry, view });
+        scene.switchTo();
+      });
+    }
+  }, [ref, imgUrl]);
 
   return (
-    <canvas
-      ref={canvas}
+    <div
+      ref={ref}
       style={{
         position: "absolute",
         top: "0",

@@ -1,9 +1,10 @@
 html,
 body {
-  padding: 0;
+  padding: 1em;
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
     Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+  background-color: #eee;
 }
 
 a {
@@ -85,9 +86,9 @@ code {
   cursor: pointer;
 }
 
-.content-item:hover picture > img,
-.content-item:focus picture > img,
-.content-item:active picture > img {
+.content-item:hover picture>img,
+.content-item:focus picture>img,
+.content-item:active picture>img {
   border-color: #0070f3;
   transition: border-color 1s ease;
 }
@@ -106,19 +107,25 @@ code {
 @media (prefers-color-scheme: dark) {
   html {
     color-scheme: dark;
+    background-color: #222;
   }
+
   body {
     color: white;
-    background: black;
+    background-color: #222;
   }
+
   section,
   footer {
-    border-color: #222;
+    border-color: #333;
   }
-  .code {
+
+  code {
+    color: #eee;
     background: #111;
   }
 }
+
 /* CSS3D panorama styles
 @keyframes spin {
   from {

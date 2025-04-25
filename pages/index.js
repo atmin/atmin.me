@@ -57,7 +57,8 @@ export default function Home() {
             <Link href="https://www.linkedin.com/in/atmin">
               linkedin.com/in/atmin
             </Link>
-            <Link href="/panoramas">…</Link>
+            <Link href="/panoramas">panoramas</Link>
+            <Link href="/playlist">playlist</Link>
           </div>
         </div>
       </main>

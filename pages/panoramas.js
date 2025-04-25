@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import profilePic from "../public/atmin160.jpg";
 
-export default function Home() {
+export default function Panoramas() {
   return (
     <>
       <Head>

@@ -1,0 +1,53 @@
+<main>
+  <div style={{ padding: "1em", display: "flex", alignItems: "center" }}>
+    <img src="/atmin-qr.png" alt="atmin qr" width={96} height={96} />
+    <div
+      style={{
+        marginLeft: "1em",
+        height: "96px",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+      }}
+    >
+      <div>
+        Atanas Minev{" "}
+        <span
+          id="emailWrapper"
+          style={{
+            fontSize: "0.8em",
+            cursor: "help",
+            userSelect: "none",
+          }}
+          onclick="revealEmail()"
+        >
+          <span style={{ opacity: 0.2 }}>&lsaquo;</span>
+          <span id="email">enable JS to reveal email</span>
+          <span style={{ opacity: 0.2 }}>&rsaquo;</span>
+        </span>
+      </div>
+      <a href="https://github.com/atmin">github.com/atmin</a>
+      <a href="https://www.linkedin.com/in/atmin"> linkedin.com/in/atmin </a>
+      <a href="/panoramas">panoramas</a>
+      <a href="/playlist">playlist</a>
+    </div>
+  </div>
+</main>
+
+<script>
+  const $emailWrapper = document.getElementById("emailWrapper")!;
+  const $email = document.getElementById("email")!;
+
+  $email.innerHTML = `${
+    typeof window === "object" && window.matchMedia("(pointer: coarse)").matches
+      ? "tap"
+      : "click"
+  } to reveal e-mail`;
+
+  (window as any).revealEmail = () => {
+    $email.innerHTML = atob("YXRtaW5AcG0ubWU=");
+    $emailWrapper.style.fontSize = "0.9em";
+    $emailWrapper.style.cursor = "default";
+    $emailWrapper.onclick = null;
+  };
+</script>

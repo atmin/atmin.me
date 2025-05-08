@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@babylonjs/core':
+        specifier: ^8.7.0
+        version: 8.7.0
       astro:
         specifier: ^5.7.10
         version: 5.7.10(rollup@4.40.2)(typescript@5.8.3)
@@ -47,6 +50,9 @@ packages:
   '@babel/types@7.27.1':
     resolution: {integrity: sha512-+EzkxvLNfiUeKMgy/3luqfsCWFRXLb7U6wNQTk60tovuckwB15B191tJWvpp4HjiQWdJkCxO3Wbvc6jlk3Xb2Q==}
     engines: {node: '>=6.9.0'}
+
+  '@babylonjs/core@8.7.0':
+    resolution: {integrity: sha512-6yVCq4lidd6B9xnyL2Ubs6v+IX6tHX3SmoMDUrrrIMYUSW/qPIG1qRWs3+3bD9gvTM8A+UY+tcMPsHkaLVnaRA==}
 
   '@capsizecss/unpack@2.4.0':
     resolution: {integrity: sha512-GrSU71meACqcmIUxPYOJvGKF0yryjN/L1aCuE9DViCTJI7bfkjgYDPD1zbNDcINJwSSP6UaBZY9GAbYDO7re0Q==}
@@ -1493,6 +1499,8 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
+
+  '@babylonjs/core@8.7.0': {}
 
   '@capsizecss/unpack@2.4.0':
     dependencies:

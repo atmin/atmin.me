@@ -1,0 +1,30 @@
+---
+import type { GetStaticPaths } from "astro";
+import type { ImageMetadata } from "astro";
+import { Image } from "astro:assets";
+import { getCollection } from "astro:content";
+
+export const getStaticPaths = (async () => {
+  const panoramas = await getCollection("pano");
+  return panoramas.map(({ id }) => ({ params: { id } }));
+}) satisfies GetStaticPaths;
+
+const panoramas = await getCollection("pano");
+const loRes = import.meta.glob<{ default: ImageMetadata }>(
+  "/src/data/pano/**/8k.avif"
+);
+const loResSrc = (id: string) =>
+  (
+    loRes[`/src/data/pano/${id}/8k.avif`] ??
+    (() =>
+      "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==")
+  )();
+const { id } = Astro.params;
+---
+
+<Image id="image" data-id={id} src={loResSrc(id)} alt={id} />
+
+<script>
+  const { id } = document.getElementById("image")!.dataset;
+  console.log(id);
+</script>

@@ -71,9 +71,9 @@ const src = (await loResSrc(id)).default.src;
       if (dome === undefined) {
         return;
       }
-      zoomLevel += e.event.wheelDelta * -0.0005;
-      if (zoomLevel < 0) {
-        zoomLevel = 0;
+      zoomLevel += (e.event as any).wheelDelta * -0.0005;
+      if (zoomLevel < 0.2) {
+        zoomLevel = 0.2;
       }
       if (zoomLevel > 2) {
         zoomLevel = 2;

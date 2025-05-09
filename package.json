@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@babylonjs/core": "^8.7.0",
-    "astro": "^5.7.10"
+    "astro": "^5.7.10",
+    "sharp": "^0.34.1"
   }
 }

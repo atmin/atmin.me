@@ -1,7 +1,6 @@
 ---
 import type { GetStaticPaths } from "astro";
 import type { ImageMetadata } from "astro";
-import { Image } from "astro:assets";
 import { getCollection } from "astro:content";
 
 export const getStaticPaths = (async () => {
@@ -20,11 +19,93 @@ const loResSrc = (id: string) =>
       "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==")
   )();
 const { id } = Astro.params;
+
+const src = (await loResSrc(id)).default.src;
 ---
 
-<Image id="image" data-id={id} src={loResSrc(id)} alt={id} />
+<canvas id="renderCanvas" data-src={src}></canvas>
 
 <script>
-  const { id } = document.getElementById("image")!.dataset;
-  console.log(id);
+  import {
+    ArcRotateCamera,
+    Engine,
+    PhotoDome,
+    PointerEventTypes,
+    Scene,
+    Vector3,
+  } from "@babylonjs/core";
+
+  const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
+  const { src } = canvas.dataset;
+
+  const engine = new Engine(canvas, true);
+
+  const createScene = () => {
+    const scene = new Scene(engine);
+
+    const camera = new ArcRotateCamera(
+      "Camera",
+      -Math.PI / 2,
+      Math.PI / 2,
+      5,
+      Vector3.Zero(),
+      scene
+    );
+    camera.attachControl(canvas, true);
+    camera.inputs.attached.mousewheel.detachControl();
+
+    let zoomLevel = 1;
+
+    const dome = new PhotoDome(
+      "PhotoDome",
+      src!,
+      {
+        resolution: 32,
+        size: 1000,
+        useDirectMapping: false,
+      },
+      scene
+    );
+
+    scene.onPointerObservable.add((e) => {
+      if (dome === undefined) {
+        return;
+      }
+      zoomLevel += e.event.wheelDelta * -0.0005;
+      if (zoomLevel < 0) {
+        zoomLevel = 0;
+      }
+      if (zoomLevel > 2) {
+        zoomLevel = 2;
+      }
+      dome.fovMultiplier = zoomLevel;
+    }, PointerEventTypes.POINTERWHEEL);
+
+    return scene;
+  };
+
+  const scene = createScene();
+
+  engine.runRenderLoop(() => scene.render());
+
+  window.addEventListener("resize", function () {
+    engine.resize();
+  });
 </script>
+
+<style>
+  html,
+  body {
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  #renderCanvas {
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+  }
+</style>

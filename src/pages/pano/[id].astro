@@ -224,6 +224,9 @@ const src = (await loResSrc(id)).default.src;
         const damping = 0.95; // Controls inertia decay
         let zoomVelocity = 0;
         const zoomDamping = 0.5;
+        let yawAccel = 0;
+        let pitchAccel = 0;
+        let zoomAccel = 0;
 
         let isDragging = false;
         let lastX = 0,
@@ -269,9 +272,10 @@ const src = (await loResSrc(id)).default.src;
             if (e.touches.length === 1 && isDragging) {
                 const dx = e.touches[0].clientX - lastX;
                 const dy = e.touches[0].clientY - lastY;
-                yaw += dx * 0.3;
-                pitch += dy * 0.3;
-                pitch = Math.max(-89, Math.min(89, pitch));
+
+                yawVelocity = dx * 0.3;
+                pitchVelocity = dy * 0.3;
+
                 lastX = e.touches[0].clientX;
                 lastY = e.touches[0].clientY;
             } else if (e.touches.length === 2) {
@@ -283,39 +287,22 @@ const src = (await loResSrc(id)).default.src;
             e.preventDefault();
         });
 
-        window.addEventListener('keydown', (e) => {
-            const step = 2; // degrees per keypress
-            const zoomStep = 2;
-
-            switch (e.key) {
-                case 'ArrowLeft':
-                case 'a':
-                    yaw -= step;
-                    break;
-                case 'ArrowRight':
-                case 'd':
-                    yaw += step;
-                    break;
-                case 'ArrowUp':
-                case 'w':
-                    pitch -= step;
-                    pitch = Math.max(-89, pitch);
-                    break;
-                case 'ArrowDown':
-                case 's':
-                    pitch += step;
-                    pitch = Math.min(89, pitch);
-                    break;
-                case '+':
-                case '=':
-                    fov = Math.max(30, fov - zoomStep);
-                    break;
-                case '-':
-                case '_':
-                    fov = Math.min(100, fov + zoomStep);
-                    break;
-            }
+        canvas.addEventListener('touchend', () => {
+            isDragging = false;
+            // yawVelocity *= 0.9;
+            // pitchVelocity *= 0.9;
         });
+
+        const keys: Record<string, boolean> = {};
+
+        window.addEventListener(
+            'keydown',
+            (e) => (keys[e.key.toLowerCase()] = true)
+        );
+        window.addEventListener(
+            'keyup',
+            (e) => (keys[e.key.toLowerCase()] = false)
+        );
 
         function getTouchDist(e: TouchEvent) {
             const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -430,6 +417,26 @@ const src = (await loResSrc(id)).default.src;
             zoomVelocity *= zoomDamping;
             if (Math.abs(zoomVelocity) < 0.05) zoomVelocity = 0;
             fov = Math.max(30, Math.min(100, fov));
+
+            const keyStep = 0.1; // how fast it accelerates
+            const zoomStep = 0.1;
+
+            if (keys['arrowleft'] || keys['a']) yawAccel = keyStep;
+            else if (keys['arrowright'] || keys['d']) yawAccel = -keyStep;
+            else yawAccel = 0;
+
+            if (keys['arrowup'] || keys['w']) pitchAccel = keyStep;
+            else if (keys['arrowdown'] || keys['s']) pitchAccel = -keyStep;
+            else pitchAccel = 0;
+
+            if (keys['='] || keys['+']) zoomAccel = -zoomStep;
+            else if (keys['-'] || keys['_']) zoomAccel = zoomStep;
+            else zoomAccel = 0;
+
+            // Apply acceleration to velocity
+            yawVelocity += yawAccel;
+            pitchVelocity += pitchAccel;
+            zoomVelocity += zoomAccel;
 
             resize();
             gl.clearColor(0, 0, 0, 1);

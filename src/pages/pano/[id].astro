@@ -1,23 +1,23 @@
 ---
-import type { GetStaticPaths } from "astro";
-import type { ImageMetadata } from "astro";
-import { getCollection } from "astro:content";
+import type { GetStaticPaths } from 'astro';
+import type { ImageMetadata } from 'astro';
+import { getCollection } from 'astro:content';
 
 export const getStaticPaths = (async () => {
-  const panoramas = await getCollection("pano");
-  return panoramas.map(({ id }) => ({ params: { id } }));
+    const panoramas = await getCollection('pano');
+    return panoramas.map(({ id }) => ({ params: { id } }));
 }) satisfies GetStaticPaths;
 
-const panoramas = await getCollection("pano");
+const panoramas = await getCollection('pano');
 const loRes = import.meta.glob<{ default: ImageMetadata }>(
-  "/src/data/pano/**/8k.avif"
+    '/src/data/pano/**/8k.avif'
 );
 const loResSrc = (id: string) =>
-  (
-    loRes[`/src/data/pano/${id}/8k.avif`] ??
-    (() =>
-      "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==")
-  )();
+    (
+        loRes[`/src/data/pano/${id}/8k.avif`] ??
+        (() =>
+            'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==')
+    )();
 const { id } = Astro.params;
 
 const src = (await loResSrc(id)).default.src;
@@ -25,7 +25,7 @@ const src = (await loResSrc(id)).default.src;
 
 <canvas id="renderCanvas" data-src={src}></canvas>
 
-<script>
+<!-- <script>
   import {
     ArcRotateCamera,
     Engine,
@@ -91,21 +91,406 @@ const src = (await loResSrc(id)).default.src;
   window.addEventListener("resize", function () {
     engine.resize();
   });
-</script>
+</script> -->
 
 <style>
-  html,
-  body {
-    overflow: hidden;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-  }
+    html,
+    body {
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
 
-  #renderCanvas {
-    width: 100%;
-    height: 100%;
-    touch-action: none;
-  }
+    #renderCanvas {
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+    }
 </style>
+
+<script>
+    (function () {
+        const canvas = document.getElementById(
+            'renderCanvas'
+        ) as HTMLCanvasElement;
+        const IMAGE_URL = canvas.dataset.src;
+
+        const gl = canvas.getContext('webgl');
+        if (!gl) {
+            alert('WebGL not supported');
+            return;
+        }
+
+        function resize() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Shaders
+        const vsSource = `
+    attribute vec3 position;
+    attribute vec2 uv;
+    varying vec2 vUv;
+    uniform mat4 uProjection;
+    uniform mat4 uView;
+    void main() {
+      vUv = uv;
+      gl_Position = uProjection * uView * vec4(position, 1.0);
+    }
+  `;
+
+        const fsSource = `
+    precision mediump float;
+    varying vec2 vUv;
+    uniform sampler2D uTexture;
+    void main() {
+      gl_FragColor = texture2D(uTexture, vec2(vUv.s, 1.0 - vUv.t));
+    }
+  `;
+
+        function createShader(type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+            }
+            return shader;
+        }
+
+        function createProgram(vs, fs) {
+            const program = gl.createProgram();
+            gl.attachShader(program, createShader(gl.VERTEX_SHADER, vs));
+            gl.attachShader(program, createShader(gl.FRAGMENT_SHADER, fs));
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error(gl.getProgramInfoLog(program));
+            }
+            return program;
+        }
+
+        const program = createProgram(vsSource, fsSource);
+        gl.useProgram(program);
+
+        // Sphere geometry
+        function createSphere(latBands, lonBands) {
+            const positions = [];
+            const uvs = [];
+            const indices = [];
+
+            for (let lat = 0; lat <= latBands; ++lat) {
+                const theta = (lat * Math.PI) / latBands;
+                const sinTheta = Math.sin(theta);
+                const cosTheta = Math.cos(theta);
+
+                for (let lon = 0; lon <= lonBands; ++lon) {
+                    const phi = (lon * 2 * Math.PI) / lonBands;
+                    const sinPhi = Math.sin(phi);
+                    const cosPhi = Math.cos(phi);
+
+                    const x = cosPhi * sinTheta;
+                    const y = -cosTheta;
+                    const z = sinPhi * sinTheta;
+                    const u = lon / lonBands;
+                    const v = lat / latBands;
+
+                    positions.push(x, y, z);
+                    uvs.push(u, v);
+                }
+            }
+
+            for (let lat = 0; lat < latBands; ++lat) {
+                for (let lon = 0; lon < lonBands; ++lon) {
+                    const first = lat * (lonBands + 1) + lon;
+                    const second = first + lonBands + 1;
+                    indices.push(first, second, first + 1);
+                    indices.push(second, second + 1, first + 1);
+                }
+            }
+
+            return {
+                positions: new Float32Array(positions),
+                uvs: new Float32Array(uvs),
+                indices: new Uint16Array(indices),
+            };
+        }
+
+        const sphere = createSphere(64, 128);
+
+        function createBuffer(data, target, usage) {
+            const buffer = gl.createBuffer();
+            gl.bindBuffer(target, buffer);
+            gl.bufferData(target, data, usage);
+            return buffer;
+        }
+
+        const positionLoc = gl.getAttribLocation(program, 'position');
+        const uvLoc = gl.getAttribLocation(program, 'uv');
+        const uProjectionLoc = gl.getUniformLocation(program, 'uProjection');
+        const uViewLoc = gl.getUniformLocation(program, 'uView');
+
+        const positionBuffer = createBuffer(
+            sphere.positions,
+            gl.ARRAY_BUFFER,
+            gl.STATIC_DRAW
+        );
+        gl.enableVertexAttribArray(positionLoc);
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
+
+        const uvBuffer = createBuffer(
+            sphere.uvs,
+            gl.ARRAY_BUFFER,
+            gl.STATIC_DRAW
+        );
+        gl.enableVertexAttribArray(uvLoc);
+        gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
+        gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 0, 0);
+
+        const indexBuffer = createBuffer(
+            sphere.indices,
+            gl.ELEMENT_ARRAY_BUFFER,
+            gl.STATIC_DRAW
+        );
+
+        // Disable culling so we render inside of the sphere
+        gl.disable(gl.CULL_FACE);
+
+        // Texture
+        const texture = gl.createTexture();
+        const image = new Image();
+        image.crossOrigin = '';
+        image.onload = () => {
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                0,
+                gl.RGB,
+                gl.RGB,
+                gl.UNSIGNED_BYTE,
+                image
+            );
+            gl.generateMipmap(gl.TEXTURE_2D);
+            requestAnimationFrame(render);
+        };
+        image.src = IMAGE_URL;
+
+        // Camera controls
+        let yaw = 0;
+        let pitch = 0;
+        let fov = 75;
+
+        let isDragging = false;
+        let lastX = 0,
+            lastY = 0;
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - lastX;
+            const dy = e.clientY - lastY;
+            yaw += dx * 0.3;
+            pitch += dy * 0.3;
+            pitch = Math.max(-89, Math.min(89, pitch));
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        canvas.addEventListener('mouseup', () => (isDragging = false));
+        canvas.addEventListener('mouseleave', () => (isDragging = false));
+        canvas.addEventListener('wheel', (e) => {
+            fov += e.deltaY * 0.05;
+            fov = Math.max(30, Math.min(100, fov));
+            e.preventDefault();
+        });
+
+        // Touch support
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                lastX = e.touches[0].clientX;
+                lastY = e.touches[0].clientY;
+            } else if (e.touches.length === 2) {
+                lastDist = getTouchDist(e);
+            }
+        });
+
+        let lastDist = 0;
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && isDragging) {
+                const dx = e.touches[0].clientX - lastX;
+                const dy = e.touches[0].clientY - lastY;
+                yaw += dx * 0.3;
+                pitch += dy * 0.3;
+                pitch = Math.max(-89, Math.min(89, pitch));
+                lastX = e.touches[0].clientX;
+                lastY = e.touches[0].clientY;
+            } else if (e.touches.length === 2) {
+                const dist = getTouchDist(e);
+                const delta = dist - lastDist;
+                fov -= delta * 0.1;
+                fov = Math.max(30, Math.min(100, fov));
+                lastDist = dist;
+            }
+            e.preventDefault();
+        });
+
+        window.addEventListener('keydown', (e) => {
+            const step = 2; // degrees per keypress
+            const zoomStep = 2;
+
+            switch (e.key) {
+                case 'ArrowLeft':
+                case 'a':
+                    yaw -= step;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    yaw += step;
+                    break;
+                case 'ArrowUp':
+                case 'w':
+                    pitch -= step;
+                    pitch = Math.max(-89, pitch);
+                    break;
+                case 'ArrowDown':
+                case 's':
+                    pitch += step;
+                    pitch = Math.min(89, pitch);
+                    break;
+                case '+':
+                case '=':
+                    fov = Math.max(30, fov - zoomStep);
+                    break;
+                case '-':
+                case '_':
+                    fov = Math.min(100, fov + zoomStep);
+                    break;
+            }
+        });
+
+        function getTouchDist(e) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        // Math utilities
+        function degToRad(d) {
+            return (d * Math.PI) / 180;
+        }
+
+        function getProjectionMatrix(fov, aspect, near, far) {
+            const f = 1.0 / Math.tan(degToRad(fov) / 2);
+            return new Float32Array([
+                f / aspect,
+                0,
+                0,
+                0,
+                0,
+                f,
+                0,
+                0,
+                0,
+                0,
+                (near + far) / (near - far),
+                -1,
+                0,
+                0,
+                (2 * near * far) / (near - far),
+                0,
+            ]);
+        }
+
+        function getViewMatrix(yawDeg, pitchDeg) {
+            const yaw = degToRad(yawDeg);
+            const pitch = degToRad(pitchDeg);
+
+            // Calculate direction vector
+            const x = Math.cos(pitch) * Math.sin(yaw);
+            const y = Math.sin(pitch);
+            const z = Math.cos(pitch) * Math.cos(yaw);
+
+            const eye = [0, 0, 0];
+            const center = [x, y, z];
+            const up = [0, 1, 0];
+
+            return lookAt(eye, center, up);
+        }
+
+        function lookAt(eye, center, up) {
+            const f = normalize([
+                center[0] - eye[0],
+                center[1] - eye[1],
+                center[2] - eye[2],
+            ]);
+            const s = normalize(cross(f, up));
+            const u = cross(s, f);
+
+            return new Float32Array([
+                s[0],
+                u[0],
+                -f[0],
+                0,
+                s[1],
+                u[1],
+                -f[1],
+                0,
+                s[2],
+                u[2],
+                -f[2],
+                0,
+                0,
+                0,
+                0,
+                1,
+            ]);
+        }
+
+        function normalize(v) {
+            const len = Math.hypot(v[0], v[1], v[2]);
+            return [v[0] / len, v[1] / len, v[2] / len];
+        }
+
+        function cross(a, b) {
+            return [
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0],
+            ];
+        }
+
+        function render() {
+            resize();
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            const aspect = canvas.width / canvas.height;
+            const projection = getProjectionMatrix(fov, aspect, 0.1, 100);
+            const view = getViewMatrix(yaw, pitch);
+
+            gl.uniformMatrix4fv(uProjectionLoc, false, projection);
+            gl.uniformMatrix4fv(uViewLoc, false, view);
+
+            gl.drawElements(
+                gl.TRIANGLES,
+                sphere.indices.length,
+                gl.UNSIGNED_SHORT,
+                0
+            );
+            requestAnimationFrame(render);
+        }
+    })();
+</script>

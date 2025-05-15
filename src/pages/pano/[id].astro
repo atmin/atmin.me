@@ -286,6 +286,11 @@ const src = (await loResSrc(id)).default.src;
         let yaw = 0;
         let pitch = 0;
         let fov = 75;
+        let yawVelocity = 0;
+        let pitchVelocity = 0;
+        const damping = 0.95; // Controls inertia decay
+        let zoomVelocity = 0;
+        const zoomDamping = 0.5;
 
         let isDragging = false;
         let lastX = 0,
@@ -301,8 +306,8 @@ const src = (await loResSrc(id)).default.src;
             if (!isDragging) return;
             const dx = e.clientX - lastX;
             const dy = e.clientY - lastY;
-            yaw += dx * 0.3;
-            pitch += dy * 0.3;
+            yawVelocity = dx * 0.3;
+            pitchVelocity = dy * 0.3;
             pitch = Math.max(-89, Math.min(89, pitch));
             lastX = e.clientX;
             lastY = e.clientY;
@@ -311,8 +316,7 @@ const src = (await loResSrc(id)).default.src;
         canvas.addEventListener('mouseup', () => (isDragging = false));
         canvas.addEventListener('mouseleave', () => (isDragging = false));
         canvas.addEventListener('wheel', (e) => {
-            fov += e.deltaY * 0.05;
-            fov = Math.max(30, Math.min(100, fov));
+            zoomVelocity += e.deltaY * 0.1; // Accumulate zoom motion
             e.preventDefault();
         });
 
@@ -340,8 +344,7 @@ const src = (await loResSrc(id)).default.src;
             } else if (e.touches.length === 2) {
                 const dist = getTouchDist(e);
                 const delta = dist - lastDist;
-                fov -= delta * 0.1;
-                fov = Math.max(30, Math.min(100, fov));
+                zoomVelocity -= delta * 0.2;
                 lastDist = dist;
             }
             e.preventDefault();
@@ -473,6 +476,23 @@ const src = (await loResSrc(id)).default.src;
         }
 
         function render() {
+            yaw += yawVelocity;
+            pitch += pitchVelocity;
+
+            pitch = Math.max(-89, Math.min(89, pitch));
+
+            // Apply damping
+            yawVelocity *= damping;
+            pitchVelocity *= damping;
+
+            if (Math.abs(yawVelocity) < 0.001) yawVelocity = 0;
+            if (Math.abs(pitchVelocity) < 0.001) pitchVelocity = 0;
+
+            fov += zoomVelocity;
+            zoomVelocity *= zoomDamping;
+            if (Math.abs(zoomVelocity) < 0.05) zoomVelocity = 0;
+            fov = Math.max(30, Math.min(100, fov));
+
             resize();
             gl.clearColor(0, 0, 0, 1);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);

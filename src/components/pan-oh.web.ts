@@ -93,6 +93,10 @@ export default class Pano extends HTMLElement {
     private lastX = 0;
     private lastY = 0;
 
+    // Mouse/touch
+    private interactionHistory: { x: number; y: number; time: number }[] = [];
+    private lastDist = 0;
+
     // Keymap
     private keys: Record<string, boolean> = {};
 
@@ -105,6 +109,7 @@ export default class Pano extends HTMLElement {
         this.attachShadow({ mode: 'open' });
 
         this.canvas = document.createElement('canvas');
+        this.canvas.setAttribute('tabindex', '0');
         this.gl = this.canvas.getContext('webgl')!;
 
         if (!this.gl) {
@@ -209,116 +214,55 @@ export default class Pano extends HTMLElement {
         };
         image.src = src;
 
+        // MOUSE
         this.canvas.addEventListener('mousedown', (e) => {
-            this.isDragging = true;
-            this.lastX = e.clientX;
-            this.lastY = e.clientY;
-            console.log('mousedown end');
+            this.canvas.focus();
+            this.startInteraction(e.clientX, e.clientY);
         });
 
         this.canvas.addEventListener('mousemove', (e) => {
-            if (!this.isDragging) return;
-            const dx = e.clientX - this.lastX;
-            const dy = e.clientY - this.lastY;
-            this.yawVelocity += dx * 0.3;
-            this.pitchVelocity += dy * 0.3;
-            this.pitch = Math.max(-89, Math.min(89, this.pitch));
-            this.lastX = e.clientX;
-            this.lastY = e.clientY;
-            console.log('mousemove end');
+            if (!this.isDragging) {
+                return;
+            }
+            this.moveInteraction(e.clientX, e.clientY);
         });
 
-        this.canvas.addEventListener('mouseup', () => {
-            this.isDragging = false;
-            console.log('mouseup end');
-        });
-        this.canvas.addEventListener('mouseleave', () => {
-            this.isDragging = false;
-            console.log('mouseleave end');
-        });
+        this.canvas.addEventListener('mouseup', () => this.endInteraction());
+        this.canvas.addEventListener('mouseleave', () => this.endInteraction());
+
         this.canvas.addEventListener('wheel', (e) => {
-            this.zoomVelocity += e.deltaY * 0.1; // Accumulate zoom motion
+            this.zoomVelocity += e.deltaY * 0.1;
             e.preventDefault();
-            console.log('wheel end');
         });
 
-        let touchHistory: { x: number; y: number; time: number }[] = [];
-        let lastDist = 0;
+        // TOUCH
+        let lastTouchDist = 0;
 
         this.canvas.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) {
-                this.isDragging = true;
-                this.lastX = e.touches[0].clientX;
-                this.lastY = e.touches[0].clientY;
-                touchHistory = [
-                    {
-                        x: this.lastX,
-                        y: this.lastY,
-                        time: performance.now(),
-                    },
-                ];
+                const { clientX, clientY } = e.touches[0];
+                this.startInteraction(clientX, clientY);
             } else if (e.touches.length === 2) {
-                lastDist = getTouchDist(e);
+                lastTouchDist = getTouchDist(e);
                 this.isDragging = false;
-                touchHistory = [];
+                this.interactionHistory = [];
             }
         });
 
         this.canvas.addEventListener('touchmove', (e) => {
             if (e.touches.length === 1 && this.isDragging) {
-                const x = e.touches[0].clientX;
-                const y = e.touches[0].clientY;
-
-                const dx = x - this.lastX;
-                const dy = y - this.lastY;
-
-                this.yaw += dx * 0.3;
-                this.pitch += dy * 0.3;
-                this.pitch = Math.max(-89, Math.min(89, this.pitch));
-
-                this.lastX = x;
-                this.lastY = y;
-
-                // Save for flick detection
-                touchHistory.push({ x, y, time: performance.now() });
-                if (touchHistory.length > 5) touchHistory.shift();
+                const { clientX, clientY } = e.touches[0];
+                this.moveInteraction(clientX, clientY);
             } else if (e.touches.length === 2) {
                 const dist = getTouchDist(e);
-                const delta = dist - lastDist;
-                this.zoomVelocity -= delta * 0.2;
-                lastDist = dist;
+                this.zoomVelocity -= (dist - lastTouchDist) * 0.2;
+                lastTouchDist = dist;
             }
             e.preventDefault();
         });
 
-        this.canvas.addEventListener('touchend', (e) => {
-            if (e.touches.length === 0 && touchHistory.length >= 2) {
-                const first = touchHistory[0];
-                const last = touchHistory[touchHistory.length - 1];
-                const dt = (last.time - first.time) / 1000;
-                const dx = last.x - first.x;
-                const dy = last.y - first.y;
-
-                const vx = dx / dt;
-                const vy = dy / dt;
-                const speed = Math.sqrt(vx * vx + vy * vy);
-
-                const threshold = 500; // pixels/sec
-                if (speed > threshold) {
-                    this.yawVelocity = vx * 0.002;
-                    this.pitchVelocity = vy * 0.002;
-                }
-            }
-
-            this.isDragging = false;
-            touchHistory = [];
-        });
-
-        window.addEventListener('keydown', (e) => {
-            this.keys[e.key.toLowerCase()] = true;
-        });
-        window.addEventListener('keyup', (e) => {
-            this.keys[e.key.toLowerCase()] = false;
+        this.canvas.addEventListener('touchend', () => {
+            this.endInteraction();
         });
 
         function getTouchDist(e: TouchEvent) {
@@ -326,6 +270,14 @@ export default class Pano extends HTMLElement {
             const dy = e.touches[0].clientY - e.touches[1].clientY;
             return Math.sqrt(dx * dx + dy * dy);
         }
+
+        // KEYBOARD
+        window.addEventListener('keydown', (e) => {
+            this.keys[e.key.toLowerCase()] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            this.keys[e.key.toLowerCase()] = false;
+        });
     }
 
     private onResize() {
@@ -415,6 +367,55 @@ export default class Pano extends HTMLElement {
             uvs: new Float32Array(uvs),
             indices: new Uint16Array(indices),
         };
+    }
+
+    private startInteraction(x: number, y: number) {
+        this.isDragging = true;
+        this.lastX = x;
+        this.lastY = y;
+        this.yawVelocity = 0;
+        this.pitchVelocity = 0;
+        this.interactionHistory = [{ x, y, time: performance.now() }];
+    }
+
+    private moveInteraction(x: number, y: number) {
+        const dx = x - this.lastX;
+        const dy = y - this.lastY;
+
+        this.yaw += dx * 0.3;
+        this.pitch += dy * 0.3;
+
+        this.pitch = Math.max(-89, Math.min(89, this.pitch));
+        this.lastX = x;
+        this.lastY = y;
+
+        this.interactionHistory.push({ x, y, time: performance.now() });
+        if (this.interactionHistory.length > 5) {
+            this.interactionHistory.shift();
+        }
+    }
+
+    private endInteraction() {
+        this.isDragging = false;
+
+        if (this.interactionHistory.length >= 2) {
+            const first = this.interactionHistory[0];
+            const last =
+                this.interactionHistory[this.interactionHistory.length - 1];
+            const dt = (last.time - first.time) / 1000;
+            const dx = last.x - first.x;
+            const dy = last.y - first.y;
+
+            const vx = dx / dt;
+            const vy = dy / dt;
+            const speed = Math.sqrt(vx * vx + vy * vy);
+
+            if (speed > 500) {
+                this.yawVelocity = vx * 0.002;
+                this.pitchVelocity = vy * 0.002;
+            }
+        }
+        this.interactionHistory = [];
     }
 
     private render() {

@@ -71,511 +71,496 @@ type SphereGeometry = {
     indices: Uint16Array<ArrayBuffer>;
 };
 
-customElements.define(
-    'pan-oh',
+export default class Pano extends HTMLElement {
+    private canvas: HTMLCanvasElement;
+    private gl: WebGLRenderingContext;
+    private sphere: SphereGeometry;
+    private uProjectionLoc: WebGLUniformLocation;
+    private uViewLoc: WebGLUniformLocation;
+    private uModeLoc: WebGLUniformLocation;
 
-    class extends HTMLElement {
-        private canvas: HTMLCanvasElement;
-        private gl: WebGLRenderingContext;
-        private sphere: SphereGeometry;
-        private uProjectionLoc: WebGLUniformLocation;
-        private uViewLoc: WebGLUniformLocation;
-        private uModeLoc: WebGLUniformLocation;
+    // Camera controls
+    private yaw = 0;
+    private pitch = 0;
+    private fov = 75;
+    private yawVelocity = 0;
+    private pitchVelocity = 0;
+    private zoomVelocity = 0;
+    private yawAccel = 0;
+    private pitchAccel = 0;
+    private zoomAccel = 0;
+    private isDragging = false;
+    private lastX = 0;
+    private lastY = 0;
 
-        // Camera controls
-        private yaw = 0;
-        private pitch = 0;
-        private fov = 75;
-        private yawVelocity = 0;
-        private pitchVelocity = 0;
-        private zoomVelocity = 0;
-        private yawAccel = 0;
-        private pitchAccel = 0;
-        private zoomAccel = 0;
-        private isDragging = false;
-        private lastX = 0;
-        private lastY = 0;
+    // Keymap
+    private keys: Record<string, boolean> = {};
 
-        // Keymap
-        private keys: Record<string, boolean> = {};
+    static get observedAttributes() {
+        return ['src'];
+    }
 
-        static get observedAttributes() {
-            return ['src'];
+    constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+
+        this.canvas = document.createElement('canvas');
+        this.gl = this.canvas.getContext('webgl')!;
+
+        if (!this.gl) {
+            alert('WebGL not supported');
         }
 
-        constructor() {
-            super();
-            this.attachShadow({ mode: 'open' });
-
-            this.canvas = document.createElement('canvas');
-            this.gl = this.canvas.getContext('webgl')!;
-
-            if (!this.gl) {
-                alert('WebGL not supported');
+        // Allow external CSS styling via :host and ::slotted if needed
+        const style = document.createElement('style');
+        style.textContent = `
+            :host {
+                display: block;
+                position: relative;
             }
 
-            // Allow external CSS styling via :host and ::slotted if needed
-            const style = document.createElement('style');
-            style.textContent = `
-                :host {
-                    display: block;
-                    position: relative;
-                }
+            canvas {
+                width: 100%;
+                height: 100%;
+                display: block;
+                touch-action: none;
+            }
+        `;
 
-                canvas {
-                    width: 100%;
-                    height: 100%;
-                    display: block;
-                    touch-action: none;
-                }
-            `;
+        this.shadowRoot?.append(style, this.canvas);
 
-            this.shadowRoot?.append(style, this.canvas);
+        // GL
+        const program = this.createProgram(vsSource, fsSource);
+        this.gl.useProgram(program);
 
-            // GL
-            const program = this.createProgram(vsSource, fsSource);
-            this.gl.useProgram(program);
+        this.sphere = this.createSphereGeometry(64, 128);
 
-            this.sphere = this.createSphereGeometry(64, 128);
+        const positionLoc = this.gl.getAttribLocation(program, 'position');
+        this.uProjectionLoc = this.gl.getUniformLocation(
+            program,
+            'uProjection'
+        )!;
+        this.uViewLoc = this.gl.getUniformLocation(program, 'uView')!;
+        this.uModeLoc = this.gl.getUniformLocation(program, 'uMode')!;
 
-            const positionLoc = this.gl.getAttribLocation(program, 'position');
-            this.uProjectionLoc = this.gl.getUniformLocation(
-                program,
-                'uProjection'
-            )!;
-            this.uViewLoc = this.gl.getUniformLocation(program, 'uView')!;
-            this.uModeLoc = this.gl.getUniformLocation(program, 'uMode')!;
+        const positionBuffer = this.createBuffer(
+            this.sphere.positions,
+            this.gl.ARRAY_BUFFER,
+            this.gl.STATIC_DRAW
+        );
+        this.gl.enableVertexAttribArray(positionLoc);
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer);
+        this.gl.vertexAttribPointer(positionLoc, 3, this.gl.FLOAT, false, 0, 0);
 
-            const positionBuffer = this.createBuffer(
-                this.sphere.positions,
-                this.gl.ARRAY_BUFFER,
-                this.gl.STATIC_DRAW
-            );
-            this.gl.enableVertexAttribArray(positionLoc);
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer);
-            this.gl.vertexAttribPointer(
-                positionLoc,
-                3,
-                this.gl.FLOAT,
-                false,
+        const uvBuffer = this.createBuffer(
+            this.sphere.uvs,
+            this.gl.ARRAY_BUFFER,
+            this.gl.STATIC_DRAW
+        );
+        const uvLoc = this.gl.getAttribLocation(program, 'uv');
+        this.gl.enableVertexAttribArray(uvLoc);
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, uvBuffer);
+        this.gl.vertexAttribPointer(uvLoc, 2, this.gl.FLOAT, false, 0, 0);
+
+        this.createBuffer(
+            this.sphere.indices,
+            this.gl.ELEMENT_ARRAY_BUFFER,
+            this.gl.STATIC_DRAW
+        );
+
+        // Disable culling so we render inside of the sphere
+        this.gl.disable(this.gl.CULL_FACE);
+    }
+
+    connectedCallback() {
+        const src = this.getAttribute('src');
+        if (src) {
+            this.initPlayer(src);
+        }
+    }
+
+    attributeChangedCallback(name: string, oldValue: string, newValue: string) {
+        if (name === 'src' && oldValue !== newValue) {
+            this.initPlayer(newValue);
+        }
+    }
+
+    initPlayer(src: string) {
+        window.addEventListener('resize', this.onResize.bind(this));
+        this.onResize();
+
+        // Texture
+        const texture = this.gl.createTexture();
+        const image = new Image();
+        image.crossOrigin = '';
+        image.onload = () => {
+            this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+            this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, false);
+            this.gl.texImage2D(
+                this.gl.TEXTURE_2D,
                 0,
-                0
+                this.gl.RGB,
+                this.gl.RGB,
+                this.gl.UNSIGNED_BYTE,
+                image
             );
+            this.gl.generateMipmap(this.gl.TEXTURE_2D);
+            requestAnimationFrame(this.render.bind(this));
+        };
+        image.src = src;
 
-            const uvBuffer = this.createBuffer(
-                this.sphere.uvs,
-                this.gl.ARRAY_BUFFER,
-                this.gl.STATIC_DRAW
-            );
-            const uvLoc = this.gl.getAttribLocation(program, 'uv');
-            this.gl.enableVertexAttribArray(uvLoc);
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, uvBuffer);
-            this.gl.vertexAttribPointer(uvLoc, 2, this.gl.FLOAT, false, 0, 0);
+        this.canvas.addEventListener('mousedown', (e) => {
+            this.isDragging = true;
+            this.lastX = e.clientX;
+            this.lastY = e.clientY;
+            console.log('mousedown end');
+        });
 
-            this.createBuffer(
-                this.sphere.indices,
-                this.gl.ELEMENT_ARRAY_BUFFER,
-                this.gl.STATIC_DRAW
-            );
+        this.canvas.addEventListener('mousemove', (e) => {
+            if (!this.isDragging) return;
+            const dx = e.clientX - this.lastX;
+            const dy = e.clientY - this.lastY;
+            this.yawVelocity += dx * 0.3;
+            this.pitchVelocity += dy * 0.3;
+            this.pitch = Math.max(-89, Math.min(89, this.pitch));
+            this.lastX = e.clientX;
+            this.lastY = e.clientY;
+            console.log('mousemove end');
+        });
 
-            // Disable culling so we render inside of the sphere
-            this.gl.disable(this.gl.CULL_FACE);
-        }
+        this.canvas.addEventListener('mouseup', () => {
+            this.isDragging = false;
+            console.log('mouseup end');
+        });
+        this.canvas.addEventListener('mouseleave', () => {
+            this.isDragging = false;
+            console.log('mouseleave end');
+        });
+        this.canvas.addEventListener('wheel', (e) => {
+            this.zoomVelocity += e.deltaY * 0.1; // Accumulate zoom motion
+            e.preventDefault();
+            console.log('wheel end');
+        });
 
-        connectedCallback() {
-            const src = this.getAttribute('src');
-            if (src) {
-                this.initPlayer(src);
-            }
-        }
+        let touchHistory: { x: number; y: number; time: number }[] = [];
+        let lastDist = 0;
 
-        attributeChangedCallback(
-            name: string,
-            oldValue: string,
-            newValue: string
-        ) {
-            if (name === 'src' && oldValue !== newValue) {
-                this.initPlayer(newValue);
-            }
-        }
-
-        initPlayer(src: string) {
-            window.addEventListener('resize', this.onResize);
-            this.onResize();
-
-            // Texture
-            const texture = this.gl.createTexture();
-            const image = new Image();
-            image.crossOrigin = '';
-            image.onload = () => {
-                this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
-                this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, false);
-                this.gl.texImage2D(
-                    this.gl.TEXTURE_2D,
-                    0,
-                    this.gl.RGB,
-                    this.gl.RGB,
-                    this.gl.UNSIGNED_BYTE,
-                    image
-                );
-                this.gl.generateMipmap(this.gl.TEXTURE_2D);
-                requestAnimationFrame(this.render);
-            };
-            image.src = src;
-
-            this.canvas.addEventListener('mousedown', (e) => {
+        this.canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
                 this.isDragging = true;
-                this.lastX = e.clientX;
-                this.lastY = e.clientY;
-            });
-
-            this.canvas.addEventListener('mousemove', (e) => {
-                if (!this.isDragging) return;
-                const dx = e.clientX - this.lastX;
-                const dy = e.clientY - this.lastY;
-                this.yawVelocity = dx * 0.3;
-                this.pitchVelocity = dy * 0.3;
-                this.pitch = Math.max(-89, Math.min(89, this.pitch));
-                this.lastX = e.clientX;
-                this.lastY = e.clientY;
-            });
-
-            this.canvas.addEventListener('mouseup', () => {
-                this.isDragging = false;
-            });
-            this.canvas.addEventListener('mouseleave', () => {
-                this.isDragging = false;
-            });
-            this.canvas.addEventListener('wheel', (e) => {
-                this.zoomVelocity += e.deltaY * 0.1; // Accumulate zoom motion
-                e.preventDefault();
-            });
-
-            let touchHistory: { x: number; y: number; time: number }[] = [];
-            let lastDist = 0;
-
-            this.canvas.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1) {
-                    this.isDragging = true;
-                    this.lastX = e.touches[0].clientX;
-                    this.lastY = e.touches[0].clientY;
-                    touchHistory = [
-                        {
-                            x: this.lastX,
-                            y: this.lastY,
-                            time: performance.now(),
-                        },
-                    ];
-                } else if (e.touches.length === 2) {
-                    lastDist = getTouchDist(e);
-                    this.isDragging = false;
-                    touchHistory = [];
-                }
-            });
-
-            this.canvas.addEventListener('touchmove', (e) => {
-                if (e.touches.length === 1 && this.isDragging) {
-                    const x = e.touches[0].clientX;
-                    const y = e.touches[0].clientY;
-
-                    const dx = x - this.lastX;
-                    const dy = y - this.lastY;
-
-                    this.yaw += dx * 0.3;
-                    this.pitch += dy * 0.3;
-                    this.pitch = Math.max(-89, Math.min(89, this.pitch));
-
-                    this.lastX = x;
-                    this.lastY = y;
-
-                    // Save for flick detection
-                    touchHistory.push({ x, y, time: performance.now() });
-                    if (touchHistory.length > 5) touchHistory.shift();
-                } else if (e.touches.length === 2) {
-                    const dist = getTouchDist(e);
-                    const delta = dist - lastDist;
-                    this.zoomVelocity -= delta * 0.2;
-                    lastDist = dist;
-                }
-                e.preventDefault();
-            });
-
-            this.canvas.addEventListener('touchend', (e) => {
-                if (e.touches.length === 0 && touchHistory.length >= 2) {
-                    const first = touchHistory[0];
-                    const last = touchHistory[touchHistory.length - 1];
-                    const dt = (last.time - first.time) / 1000;
-                    const dx = last.x - first.x;
-                    const dy = last.y - first.y;
-
-                    const vx = dx / dt;
-                    const vy = dy / dt;
-                    const speed = Math.sqrt(vx * vx + vy * vy);
-
-                    const threshold = 500; // pixels/sec
-                    if (speed > threshold) {
-                        this.yawVelocity = vx * 0.002;
-                        this.pitchVelocity = vy * 0.002;
-                    }
-                }
-
+                this.lastX = e.touches[0].clientX;
+                this.lastY = e.touches[0].clientY;
+                touchHistory = [
+                    {
+                        x: this.lastX,
+                        y: this.lastY,
+                        time: performance.now(),
+                    },
+                ];
+            } else if (e.touches.length === 2) {
+                lastDist = getTouchDist(e);
                 this.isDragging = false;
                 touchHistory = [];
-            });
-
-            window.addEventListener(
-                'keydown',
-                (e) => (this.keys[e.key.toLowerCase()] = true)
-            );
-            window.addEventListener(
-                'keyup',
-                (e) => (this.keys[e.key.toLowerCase()] = false)
-            );
-
-            function getTouchDist(e: TouchEvent) {
-                const dx = e.touches[0].clientX - e.touches[1].clientX;
-                const dy = e.touches[0].clientY - e.touches[1].clientY;
-                return Math.sqrt(dx * dx + dy * dy);
             }
-        }
+        });
 
-        private onResize() {
-            this.canvas.width = this.canvas.clientWidth;
-            this.canvas.height = this.canvas.clientHeight;
-            this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-        }
+        this.canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && this.isDragging) {
+                const x = e.touches[0].clientX;
+                const y = e.touches[0].clientY;
 
-        private createShader(type: number, source: string) {
-            const shader = this.gl.createShader(type)!;
-            this.gl.shaderSource(shader, source);
-            this.gl.compileShader(shader);
-            if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
-                console.error(this.gl.getShaderInfoLog(shader));
+                const dx = x - this.lastX;
+                const dy = y - this.lastY;
+
+                this.yaw += dx * 0.3;
+                this.pitch += dy * 0.3;
+                this.pitch = Math.max(-89, Math.min(89, this.pitch));
+
+                this.lastX = x;
+                this.lastY = y;
+
+                // Save for flick detection
+                touchHistory.push({ x, y, time: performance.now() });
+                if (touchHistory.length > 5) touchHistory.shift();
+            } else if (e.touches.length === 2) {
+                const dist = getTouchDist(e);
+                const delta = dist - lastDist;
+                this.zoomVelocity -= delta * 0.2;
+                lastDist = dist;
             }
-            return shader;
-        }
+            e.preventDefault();
+        });
 
-        private createProgram(vs: string, fs: string) {
-            const program = this.gl.createProgram();
-            this.gl.attachShader(
-                program,
-                this.createShader(this.gl.VERTEX_SHADER, vs)
-            );
-            this.gl.attachShader(
-                program,
-                this.createShader(this.gl.FRAGMENT_SHADER, fs)
-            );
-            this.gl.linkProgram(program);
-            if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
-                console.error(this.gl.getProgramInfoLog(program));
-            }
-            return program;
-        }
+        this.canvas.addEventListener('touchend', (e) => {
+            if (e.touches.length === 0 && touchHistory.length >= 2) {
+                const first = touchHistory[0];
+                const last = touchHistory[touchHistory.length - 1];
+                const dt = (last.time - first.time) / 1000;
+                const dx = last.x - first.x;
+                const dy = last.y - first.y;
 
-        private createBuffer(
-            data: AllowSharedBufferSource | null,
-            target: number,
-            usage: number
-        ) {
-            const buffer = this.gl.createBuffer();
-            this.gl.bindBuffer(target, buffer);
-            this.gl.bufferData(target, data, usage);
-            return buffer;
-        }
+                const vx = dx / dt;
+                const vy = dy / dt;
+                const speed = Math.sqrt(vx * vx + vy * vy);
 
-        private createSphereGeometry(
-            latBands: number,
-            lonBands: number
-        ): SphereGeometry {
-            const positions = [];
-            const uvs = [];
-            const indices = [];
-
-            for (let lat = 0; lat <= latBands; ++lat) {
-                const theta = (lat * Math.PI) / latBands;
-                const sinTheta = Math.sin(theta);
-                const cosTheta = Math.cos(theta);
-
-                for (let lon = 0; lon <= lonBands; ++lon) {
-                    const phi = (lon * 2 * Math.PI) / lonBands;
-                    const sinPhi = Math.sin(phi);
-                    const cosPhi = Math.cos(phi);
-
-                    const x = cosPhi * sinTheta;
-                    const y = -cosTheta;
-                    const z = sinPhi * sinTheta;
-                    const u = lon / lonBands;
-                    const v = lat / latBands;
-
-                    positions.push(x, y, z);
-                    uvs.push(u, v);
+                const threshold = 500; // pixels/sec
+                if (speed > threshold) {
+                    this.yawVelocity = vx * 0.002;
+                    this.pitchVelocity = vy * 0.002;
                 }
             }
 
-            for (let lat = 0; lat < latBands; ++lat) {
-                for (let lon = 0; lon < lonBands; ++lon) {
-                    const first = lat * (lonBands + 1) + lon;
-                    const second = first + lonBands + 1;
-                    indices.push(first, second, first + 1);
-                    indices.push(second, second + 1, first + 1);
-                }
-            }
+            this.isDragging = false;
+            touchHistory = [];
+        });
 
-            return {
-                positions: new Float32Array(positions),
-                uvs: new Float32Array(uvs),
-                indices: new Uint16Array(indices),
-            };
+        window.addEventListener('keydown', (e) => {
+            this.keys[e.key.toLowerCase()] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            this.keys[e.key.toLowerCase()] = false;
+        });
+
+        function getTouchDist(e: TouchEvent) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+    }
+
+    private onResize() {
+        this.canvas.width = this.canvas.clientWidth;
+        this.canvas.height = this.canvas.clientHeight;
+        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    private createShader(type: number, source: string) {
+        const shader = this.gl.createShader(type)!;
+        this.gl.shaderSource(shader, source);
+        this.gl.compileShader(shader);
+        if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
+            console.error(this.gl.getShaderInfoLog(shader));
+        }
+        return shader;
+    }
+
+    private createProgram(vs: string, fs: string) {
+        const program = this.gl.createProgram();
+        this.gl.attachShader(
+            program,
+            this.createShader(this.gl.VERTEX_SHADER, vs)
+        );
+        this.gl.attachShader(
+            program,
+            this.createShader(this.gl.FRAGMENT_SHADER, fs)
+        );
+        this.gl.linkProgram(program);
+        if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
+            console.error(this.gl.getProgramInfoLog(program));
+        }
+        return program;
+    }
+
+    private createBuffer(
+        data: AllowSharedBufferSource | null,
+        target: number,
+        usage: number
+    ) {
+        const buffer = this.gl.createBuffer();
+        this.gl.bindBuffer(target, buffer);
+        this.gl.bufferData(target, data, usage);
+        return buffer;
+    }
+
+    private createSphereGeometry(
+        latBands: number,
+        lonBands: number
+    ): SphereGeometry {
+        const positions = [];
+        const uvs = [];
+        const indices = [];
+
+        for (let lat = 0; lat <= latBands; ++lat) {
+            const theta = (lat * Math.PI) / latBands;
+            const sinTheta = Math.sin(theta);
+            const cosTheta = Math.cos(theta);
+
+            for (let lon = 0; lon <= lonBands; ++lon) {
+                const phi = (lon * 2 * Math.PI) / lonBands;
+                const sinPhi = Math.sin(phi);
+                const cosPhi = Math.cos(phi);
+
+                const x = cosPhi * sinTheta;
+                const y = -cosTheta;
+                const z = sinPhi * sinTheta;
+                const u = lon / lonBands;
+                const v = lat / latBands;
+
+                positions.push(x, y, z);
+                uvs.push(u, v);
+            }
         }
 
-        private render() {
-            this.yaw += this.yawVelocity;
-            this.pitch += this.pitchVelocity;
-
-            this.pitch = Math.max(-89, Math.min(89, this.pitch));
-
-            // Apply damping
-            this.yawVelocity *= DAMPING;
-            this.pitchVelocity *= DAMPING;
-
-            if (Math.abs(this.yawVelocity) < 0.001) {
-                this.yawVelocity = 0;
+        for (let lat = 0; lat < latBands; ++lat) {
+            for (let lon = 0; lon < lonBands; ++lon) {
+                const first = lat * (lonBands + 1) + lon;
+                const second = first + lonBands + 1;
+                indices.push(first, second, first + 1);
+                indices.push(second, second + 1, first + 1);
             }
-            if (Math.abs(this.pitchVelocity) < 0.001) {
-                this.pitchVelocity = 0;
-            }
-
-            this.fov += this.zoomVelocity;
-            this.zoomVelocity *= ZOOM_DAMPING;
-            if (Math.abs(this.zoomVelocity) < 0.05) {
-                this.zoomVelocity = 0;
-            }
-            this.fov = Math.max(30, Math.min(100, this.fov));
-
-            const keyStep = 0.1; // how fast it accelerates
-            const zoomStep = 0.1;
-
-            if (this.keys['arrowleft'] || this.keys['a']) {
-                this.yawAccel = keyStep;
-            } else if (this.keys['arrowright'] || this.keys['d']) {
-                this.yawAccel = -keyStep;
-            } else this.yawAccel = 0;
-
-            if (this.keys['arrowup'] || this.keys['w']) {
-                this.pitchAccel = keyStep;
-            } else if (this.keys['arrowdown'] || this.keys['s']) {
-                this.pitchAccel = -keyStep;
-            } else {
-                this.pitchAccel = 0;
-            }
-
-            if (this.keys['='] || this.keys['+']) {
-                this.zoomAccel = -zoomStep;
-            } else if (this.keys['-'] || this.keys['_']) {
-                this.zoomAccel = zoomStep;
-            } else {
-                this.zoomAccel = 0;
-            }
-
-            // Apply acceleration to velocity
-            this.yawVelocity += this.yawAccel;
-            this.pitchVelocity += this.pitchAccel;
-            this.zoomVelocity += this.zoomAccel;
-
-            this.onResize();
-
-            this.gl.clearColor(0, 0, 0, 1);
-            this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
-
-            const aspect = this.canvas.width / this.canvas.height;
-            const projection = this.getProjectionMatrix(
-                this.fov,
-                aspect,
-                0.1,
-                100
-            );
-            const view = this.getViewMatrix(this.yaw, this.pitch);
-
-            this.gl.uniformMatrix4fv(this.uViewLoc, false, view);
-            this.gl.uniformMatrix4fv(this.uProjectionLoc, false, projection);
-            const currentMode = 0; // 0 - perspective, 1 - stereographic
-            this.gl.uniform1i(this.uModeLoc, currentMode);
-
-            this.gl.drawElements(
-                this.gl.TRIANGLES,
-                this.sphere.indices.length,
-                this.gl.UNSIGNED_SHORT,
-                0
-            );
-            requestAnimationFrame(this.render);
         }
 
-        // Math utilities
-        private degToRad(d: number) {
-            return (d * Math.PI) / 180;
+        return {
+            positions: new Float32Array(positions),
+            uvs: new Float32Array(uvs),
+            indices: new Uint16Array(indices),
+        };
+    }
+
+    private render() {
+        this.yaw += this.yawVelocity;
+        this.pitch += this.pitchVelocity;
+
+        this.pitch = Math.max(-89, Math.min(89, this.pitch));
+
+        // Apply damping
+        this.yawVelocity *= DAMPING;
+        this.pitchVelocity *= DAMPING;
+
+        if (Math.abs(this.yawVelocity) < 0.001) {
+            this.yawVelocity = 0;
+        }
+        if (Math.abs(this.pitchVelocity) < 0.001) {
+            this.pitchVelocity = 0;
         }
 
-        private getProjectionMatrix(
-            fov: number,
-            aspect: number,
-            near: number,
-            far: number
-        ) {
-            const f = 1.0 / Math.tan(this.degToRad(fov) / 2);
-            // prettier-ignore
-            return new Float32Array([
+        this.fov += this.zoomVelocity;
+        this.zoomVelocity *= ZOOM_DAMPING;
+        if (Math.abs(this.zoomVelocity) < 0.05) {
+            this.zoomVelocity = 0;
+        }
+        this.fov = Math.max(30, Math.min(100, this.fov));
+
+        const keyStep = 0.1; // how fast it accelerates
+        const zoomStep = 0.1;
+
+        if (this.keys['arrowleft'] || this.keys['a']) {
+            this.yawAccel = keyStep;
+        } else if (this.keys['arrowright'] || this.keys['d']) {
+            this.yawAccel = -keyStep;
+        } else this.yawAccel = 0;
+
+        if (this.keys['arrowup'] || this.keys['w']) {
+            this.pitchAccel = keyStep;
+        } else if (this.keys['arrowdown'] || this.keys['s']) {
+            this.pitchAccel = -keyStep;
+        } else {
+            this.pitchAccel = 0;
+        }
+
+        if (this.keys['='] || this.keys['+']) {
+            this.zoomAccel = -zoomStep;
+        } else if (this.keys['-'] || this.keys['_']) {
+            this.zoomAccel = zoomStep;
+        } else {
+            this.zoomAccel = 0;
+        }
+
+        // Apply acceleration to velocity
+        this.yawVelocity += this.yawAccel;
+        this.pitchVelocity += this.pitchAccel;
+        this.zoomVelocity += this.zoomAccel;
+
+        this.onResize();
+
+        this.gl.clearColor(0, 0, 0, 1);
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+
+        const aspect = this.canvas.width / this.canvas.height;
+        const projection = this.getProjectionMatrix(this.fov, aspect, 0.1, 100);
+        const view = this.getViewMatrix(this.yaw, this.pitch);
+
+        this.gl.uniformMatrix4fv(this.uViewLoc, false, view);
+        this.gl.uniformMatrix4fv(this.uProjectionLoc, false, projection);
+        const currentMode = 0; // 0 - perspective, 1 - stereographic
+        this.gl.uniform1i(this.uModeLoc, currentMode);
+
+        this.gl.drawElements(
+            this.gl.TRIANGLES,
+            this.sphere.indices.length,
+            this.gl.UNSIGNED_SHORT,
+            0
+        );
+        requestAnimationFrame(this.render.bind(this));
+    }
+
+    // Math utilities
+    private degToRad(d: number) {
+        return (d * Math.PI) / 180;
+    }
+
+    private getProjectionMatrix(
+        fov: number,
+        aspect: number,
+        near: number,
+        far: number
+    ) {
+        const f = 1.0 / Math.tan(this.degToRad(fov) / 2);
+        // prettier-ignore
+        return new Float32Array([
                 f / aspect, 0, 0, 0,
                 0, f, 0, 0,
                 0, 0, (near + far) / (near - far), -1,
                 0, 0, (2 * near * far) / (near - far), 0,
             ]);
-        }
+    }
 
-        private getViewMatrix(yawDeg: number, pitchDeg: number) {
-            const yaw = this.degToRad(yawDeg);
-            const pitch = this.degToRad(pitchDeg);
+    private getViewMatrix(yawDeg: number, pitchDeg: number) {
+        const yaw = this.degToRad(yawDeg);
+        const pitch = this.degToRad(pitchDeg);
 
-            // Calculate direction vector
-            const x = Math.cos(pitch) * Math.sin(yaw);
-            const y = Math.sin(pitch);
-            const z = Math.cos(pitch) * Math.cos(yaw);
+        // Calculate direction vector
+        const x = Math.cos(pitch) * Math.sin(yaw);
+        const y = Math.sin(pitch);
+        const z = Math.cos(pitch) * Math.cos(yaw);
 
-            const eye = [0, 0, 0];
-            const center = [x, y, z];
-            const up = [0, 1, 0];
+        const eye = [0, 0, 0];
+        const center = [x, y, z];
+        const up = [0, 1, 0];
 
-            return this.lookAt(eye, center, up);
-        }
+        return this.lookAt(eye, center, up);
+    }
 
-        private lookAt(eye: number[], center: number[], up: number[]) {
-            const f = this.normalizeVector([
-                center[0] - eye[0],
-                center[1] - eye[1],
-                center[2] - eye[2],
-            ]);
-            const s = this.normalizeVector(this.cross(f, up));
-            const u = this.cross(s, f);
+    private lookAt(eye: number[], center: number[], up: number[]) {
+        const f = this.normalizeVector([
+            center[0] - eye[0],
+            center[1] - eye[1],
+            center[2] - eye[2],
+        ]);
+        const s = this.normalizeVector(this.cross(f, up));
+        const u = this.cross(s, f);
 
-            // prettier-ignore
-            return new Float32Array([
+        // prettier-ignore
+        return new Float32Array([
                 s[0], u[0], -f[0], 0,
                 s[1], u[1], -f[1], 0,
                 s[2], u[2], -f[2], 0,
                 0, 0, 0, 1,
             ]);
-        }
-
-        private normalizeVector(v: number[]) {
-            const len = Math.hypot(v[0], v[1], v[2]);
-            return [v[0] / len, v[1] / len, v[2] / len];
-        }
-
-        private cross(a: number[], b: number[]) {
-            return [
-                a[1] * b[2] - a[2] * b[1],
-                a[2] * b[0] - a[0] * b[2],
-                a[0] * b[1] - a[1] * b[0],
-            ];
-        }
     }
-);
+
+    private normalizeVector(v: number[]) {
+        const len = Math.hypot(v[0], v[1], v[2]);
+        return [v[0] / len, v[1] / len, v[2] / len];
+    }
+
+    private cross(a: number[], b: number[]) {
+        return [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ];
+    }
+}
+
+customElements.define('pan-oh', Pano);

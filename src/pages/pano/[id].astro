@@ -78,13 +78,55 @@ const src = (await loResSrc(id)).default.src;
         `;
 
         const fsSource = `
-            precision mediump float;
-            varying vec2 vUv;
-            uniform sampler2D uTexture;
+precision mediump float;
+varying vec2 vUv;
+uniform sampler2D uTexture;
+uniform int uMode; // 0 = normal, 1 = little planet
 
-            void main() {
-                gl_FragColor = texture2D(uTexture, vec2(vUv.s, 1.0 - vUv.t));
-            }
+const float PI = 3.1415926;
+const float PI2 = 6.2831852;
+
+vec2 stereographicProjection(vec2 uv) {
+    vec2 xy = (uv * 2.0 - 1.0); // Convert from [0,1] to [-1,1]
+    float r2 = dot(xy, xy);
+
+    if (r2 > 1.0) discard;
+
+    // Inverse stereographic projection to 3D direction
+    vec3 dir = normalize(vec3(
+        2.0 * xy.x,
+        2.0 * xy.y,
+        1.0 - r2
+    ));
+
+    // Apply rotation: +90° pitch down (align center of disc to nadir)
+    vec3 rotatedDir = vec3(
+        dir.x,
+        dir.z,
+        -dir.y
+    );
+
+    float lon = atan(rotatedDir.x, rotatedDir.z);
+    float lat = asin(clamp(rotatedDir.y, -1.0, 1.0));
+
+    // Map to equirectangular texture space
+    vec2 texUV;
+    texUV.x = mod(lon / PI2 + 0.5, 1.0);
+    texUV.y = 0.5 - lat / PI;
+
+    return texUV;
+}
+
+void main() {
+    vec2 uv = vUv;
+
+    if (uMode == 1) {
+        uv = stereographicProjection(vUv);
+    }
+
+    gl_FragColor = texture2D(uTexture, vec2(uv.s, 1.0 - uv.t));
+}
+
         `;
 
         function createShader(type: number, source: string) {
@@ -156,7 +198,11 @@ const src = (await loResSrc(id)).default.src;
 
         const sphere = createSphere(64, 128);
 
-        function createBuffer(data: AllowSharedBufferSource | null, target: number, usage: number) {
+        function createBuffer(
+            data: AllowSharedBufferSource | null,
+            target: number,
+            usage: number
+        ) {
             const buffer = gl.createBuffer();
             gl.bindBuffer(target, buffer);
             gl.bufferData(target, data, usage);
@@ -167,6 +213,7 @@ const src = (await loResSrc(id)).default.src;
         const uvLoc = gl.getAttribLocation(program, 'uv');
         const uProjectionLoc = gl.getUniformLocation(program, 'uProjection');
         const uViewLoc = gl.getUniformLocation(program, 'uView');
+        const uModeLoc = gl.getUniformLocation(program, 'uMode');
 
         const positionBuffer = createBuffer(
             sphere.positions,
@@ -470,6 +517,7 @@ const src = (await loResSrc(id)).default.src;
             zoomVelocity += zoomAccel;
 
             resize();
+
             gl.clearColor(0, 0, 0, 1);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -477,8 +525,10 @@ const src = (await loResSrc(id)).default.src;
             const projection = getProjectionMatrix(fov, aspect, 0.1, 100);
             const view = getViewMatrix(yaw, pitch);
 
-            gl.uniformMatrix4fv(uProjectionLoc, false, projection);
             gl.uniformMatrix4fv(uViewLoc, false, view);
+            gl.uniformMatrix4fv(uProjectionLoc, false, projection);
+            const currentMode = 0; // 0 - perspective, 1 - stereographic
+            gl.uniform1i(uModeLoc, currentMode);
 
             gl.drawElements(
                 gl.TRIANGLES,

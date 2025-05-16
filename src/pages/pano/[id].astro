@@ -233,7 +233,7 @@ void main() {
         gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
         gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 0, 0);
 
-        const indexBuffer = createBuffer(
+        createBuffer(
             sphere.indices,
             gl.ELEMENT_ARRAY_BUFFER,
             gl.STATIC_DRAW

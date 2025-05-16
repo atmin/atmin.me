@@ -58,7 +58,7 @@ const fsSource = `
             uv = stereographicProjection(vUv);
         }
 
-        gl_FragColor = texture2D(uTexture, vec2(uv.s, 1.0 - uv.t));
+        gl_FragColor = texture2D(uTexture, vec2(uv.s, 1.0 - uv.t), -3.0);
     }
 `;
 

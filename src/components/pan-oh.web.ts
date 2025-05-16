@@ -1,4 +1,6 @@
-const vsSource = `
+const glsl = (x: any): string => x; // for syntax-highlighting purposes
+
+const vsSource = glsl`
     attribute vec3 position;
     attribute vec2 uv;
     varying vec2 vUv;
@@ -11,7 +13,7 @@ const vsSource = `
     }
 `;
 
-const fsSource = `
+const fsSource = glsl`
     precision mediump float;
     varying vec2 vUv;
     uniform sampler2D uTexture;

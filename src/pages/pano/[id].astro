@@ -156,7 +156,7 @@ const src = (await loResSrc(id)).default.src;
 
         const sphere = createSphere(64, 128);
 
-        function createBuffer(data: GLsizeiptr, target: number, usage: number) {
+        function createBuffer(data: AllowSharedBufferSource | null, target: number, usage: number) {
             const buffer = gl.createBuffer();
             gl.bindBuffer(target, buffer);
             gl.bufferData(target, data, usage);

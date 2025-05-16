@@ -191,8 +191,8 @@ export default class Pano extends HTMLElement {
     }
 
     initPlayer(src: string) {
-        window.addEventListener('resize', this.onResize.bind(this));
-        this.onResize();
+        window.addEventListener('resize', () => this.resize());
+        this.resize();
 
         // Texture
         const texture = this.gl.createTexture();
@@ -210,7 +210,7 @@ export default class Pano extends HTMLElement {
                 image
             );
             this.gl.generateMipmap(this.gl.TEXTURE_2D);
-            requestAnimationFrame(this.render.bind(this));
+            requestAnimationFrame(() => this.render());
         };
         image.src = src;
 
@@ -280,7 +280,7 @@ export default class Pano extends HTMLElement {
         });
     }
 
-    private onResize() {
+    private resize() {
         this.canvas.width = this.canvas.clientWidth;
         this.canvas.height = this.canvas.clientHeight;
         this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
@@ -472,7 +472,7 @@ export default class Pano extends HTMLElement {
         this.pitchVelocity += this.pitchAccel;
         this.zoomVelocity += this.zoomAccel;
 
-        this.onResize();
+        this.resize();
 
         this.gl.clearColor(0, 0, 0, 1);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
@@ -492,7 +492,7 @@ export default class Pano extends HTMLElement {
             this.gl.UNSIGNED_SHORT,
             0
         );
-        requestAnimationFrame(this.render.bind(this));
+        requestAnimationFrame(() => this.render());
     }
 
     // Math utilities
@@ -509,11 +509,11 @@ export default class Pano extends HTMLElement {
         const f = 1.0 / Math.tan(this.degToRad(fov) / 2);
         // prettier-ignore
         return new Float32Array([
-                f / aspect, 0, 0, 0,
-                0, f, 0, 0,
-                0, 0, (near + far) / (near - far), -1,
-                0, 0, (2 * near * far) / (near - far), 0,
-            ]);
+            f / aspect, 0, 0, 0,
+            0, f, 0, 0,
+            0, 0, (near + far) / (near - far), -1,
+            0, 0, (2 * near * far) / (near - far), 0,
+        ]);
     }
 
     private getViewMatrix(yawDeg: number, pitchDeg: number) {
@@ -543,11 +543,11 @@ export default class Pano extends HTMLElement {
 
         // prettier-ignore
         return new Float32Array([
-                s[0], u[0], -f[0], 0,
-                s[1], u[1], -f[1], 0,
-                s[2], u[2], -f[2], 0,
-                0, 0, 0, 1,
-            ]);
+            s[0], u[0], -f[0], 0,
+            s[1], u[1], -f[1], 0,
+            s[2], u[2], -f[2], 0,
+            0, 0, 0, 1,
+        ]);
     }
 
     private normalizeVector(v: number[]) {

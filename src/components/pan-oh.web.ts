@@ -96,6 +96,8 @@ export default class Pano extends HTMLElement {
     private yaw = 0;
     private pitch = 0;
     private zoom = 2;
+    private aspectRatio;
+
     private yawVelocity = 0;
     private pitchVelocity = 0;
     private zoomVelocity = 0;
@@ -106,9 +108,14 @@ export default class Pano extends HTMLElement {
     private lastX = 0;
     private lastY = 0;
 
+    // Be efficient
+    private lastYaw = 0;
+    private lastPitch = 0;
+    private lastZoom = 0;
+    private lastAspectRatio = 0;
+
     // Mouse/touch
     private interactionHistory: { x: number; y: number; time: number }[] = [];
-    private lastDist = 0;
 
     // Keymap
     private keys: Record<string, boolean> = {};
@@ -123,6 +130,7 @@ export default class Pano extends HTMLElement {
 
         this.canvas = document.createElement('canvas');
         this.canvas.setAttribute('tabindex', '0');
+        this.aspectRatio = this.canvas.height / this.canvas.width;
         this.gl = this.canvas.getContext('webgl')!;
 
         if (!this.gl) {
@@ -313,6 +321,7 @@ export default class Pano extends HTMLElement {
     private resize() {
         this.canvas.width = this.canvas.clientWidth;
         this.canvas.height = this.canvas.clientHeight;
+        this.aspectRatio = this.canvas.height / this.canvas.width;
         this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     }
 
@@ -415,7 +424,6 @@ export default class Pano extends HTMLElement {
             this.zoomVelocity = 0;
         }
         this.zoom = Math.max(0.6, Math.min(10, this.zoom));
-        console.log(this.zoom);
 
         const keyStep = 0.1; // how fast it accelerates
         const zoomStep = 0.1;
@@ -447,44 +455,63 @@ export default class Pano extends HTMLElement {
         this.pitchVelocity += this.pitchAccel;
         this.zoomVelocity += this.zoomAccel;
 
-        // this.resize();
+        if (
+            this.yaw !== this.lastYaw ||
+            this.pitch !== this.lastPitch ||
+            this.zoom !== this.lastZoom ||
+            this.aspectRatio !== this.lastAspectRatio
+        ) {
+            this.lastYaw = this.yaw;
+            this.lastPitch = this.pitch;
+            this.lastZoom = this.zoom;
+            this.lastAspectRatio = this.aspectRatio;
 
-        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-        this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
-        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+            this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+            this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
-        this.gl.useProgram(this.program);
+            this.gl.useProgram(this.program);
 
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.posBuf);
-        this.gl.enableVertexAttribArray(this.positionLoc);
-        this.gl.vertexAttribPointer(
-            this.positionLoc,
-            2,
-            this.gl.FLOAT,
-            false,
-            0,
-            0
-        );
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.posBuf);
+            this.gl.enableVertexAttribArray(this.positionLoc);
+            this.gl.vertexAttribPointer(
+                this.positionLoc,
+                2,
+                this.gl.FLOAT,
+                false,
+                0,
+                0
+            );
 
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuf);
-        this.gl.enableVertexAttribArray(this.uvLoc);
-        this.gl.vertexAttribPointer(this.uvLoc, 2, this.gl.FLOAT, false, 0, 0);
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuf);
+            this.gl.enableVertexAttribArray(this.uvLoc);
+            this.gl.vertexAttribPointer(
+                this.uvLoc,
+                2,
+                this.gl.FLOAT,
+                false,
+                0,
+                0
+            );
 
-        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.idxBuf);
+            this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.idxBuf);
 
-        this.gl.uniform1f(this.uYaw, this.degToRad(this.yaw));
-        this.gl.uniform1f(this.uPitch, this.degToRad(this.pitch));
-        this.gl.uniform1f(this.uZoom, this.zoom);
-        this.gl.uniform1f(
-            this.uAspectRatio,
-            this.canvas.height / this.canvas.width
-        );
+            this.gl.uniform1f(this.uYaw, this.degToRad(this.yaw));
+            this.gl.uniform1f(this.uPitch, this.degToRad(this.pitch));
+            this.gl.uniform1f(this.uZoom, this.zoom);
+            this.gl.uniform1f(this.uAspectRatio, this.aspectRatio);
 
-        this.gl.activeTexture(this.gl.TEXTURE0);
-        this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
-        this.gl.uniform1i(this.uTexture, 0);
+            this.gl.activeTexture(this.gl.TEXTURE0);
+            this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+            this.gl.uniform1i(this.uTexture, 0);
 
-        this.gl.drawElements(this.gl.TRIANGLES, 6, this.gl.UNSIGNED_SHORT, 0);
+            this.gl.drawElements(
+                this.gl.TRIANGLES,
+                6,
+                this.gl.UNSIGNED_SHORT,
+                0
+            );
+        }
 
         requestAnimationFrame(() => this.render());
     }

@@ -75,6 +75,9 @@ const fragmentShaderSource = glsl`
 
 const DAMPING = 0.98; // Controls inertia decay
 const ZOOM_DAMPING = 0.5;
+const EPSILON = 0.001;
+const MIN_ZOOM = 0.8;
+const MAX_ZOOM = 10;
 
 export default class Pano extends HTMLElement {
     private canvas: HTMLCanvasElement;
@@ -219,7 +222,6 @@ export default class Pano extends HTMLElement {
         this.resize();
 
         // Texture
-        // this.texture = this.gl.createTexture();
         const image = new Image();
         image.src = src;
         image.crossOrigin = '';
@@ -248,7 +250,6 @@ export default class Pano extends HTMLElement {
             if (error !== gl.NO_ERROR) {
                 console.error('WebGL texture upload error:', error);
             }
-            // this.gl.generateMipmap(this.gl.TEXTURE_2D);   ???????
             requestAnimationFrame(() => this.render());
         };
 
@@ -269,7 +270,7 @@ export default class Pano extends HTMLElement {
         this.canvas.addEventListener('mouseleave', () => this.endInteraction());
 
         this.canvas.addEventListener('wheel', (e) => {
-            this.zoomVelocity += e.deltaY * 0.001;
+            this.zoomVelocity -= e.deltaY * 0.0005;
             e.preventDefault();
         });
 
@@ -293,7 +294,7 @@ export default class Pano extends HTMLElement {
                 this.moveInteraction(clientX, clientY);
             } else if (e.touches.length === 2) {
                 const dist = getTouchDist(e);
-                this.zoomVelocity -= (dist - lastTouchDist) * 0.2;
+                this.zoomVelocity -= (dist - lastTouchDist) * 0.01;
                 lastTouchDist = dist;
             }
             e.preventDefault();
@@ -411,10 +412,10 @@ export default class Pano extends HTMLElement {
         this.yawVelocity *= DAMPING;
         this.pitchVelocity *= DAMPING;
 
-        if (Math.abs(this.yawVelocity) < 0.001) {
+        if (Math.abs(this.yawVelocity) < EPSILON) {
             this.yawVelocity = 0;
         }
-        if (Math.abs(this.pitchVelocity) < 0.001) {
+        if (Math.abs(this.pitchVelocity) < EPSILON) {
             this.pitchVelocity = 0;
         }
 
@@ -423,7 +424,7 @@ export default class Pano extends HTMLElement {
         if (Math.abs(this.zoomVelocity) < 0.05) {
             this.zoomVelocity = 0;
         }
-        this.zoom = Math.max(0.6, Math.min(10, this.zoom));
+        this.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.zoom));
 
         const keyStep = 0.1; // how fast it accelerates
         const zoomStep = 0.1;

@@ -1,90 +1,74 @@
 const glsl = (x: any): string => x; // for syntax-highlighting purposes
 
-const vsSource = glsl`
-    attribute vec3 position;
+const vertexShaderSource = glsl`
+    attribute vec2 position;
     attribute vec2 uv;
     varying vec2 vUv;
-    uniform mat4 uProjection;
-    uniform mat4 uView;
-
     void main() {
         vUv = uv;
-        gl_Position = uProjection * uView * vec4(position, 1.0);
+        gl_Position = vec4(position, 0.0, 1.0);
     }
 `;
 
-const fsSource = glsl`
+const fragmentShaderSource = glsl`
     precision mediump float;
-    varying vec2 vUv;
+
+    const float PI = 3.1415926535;
+    
     uniform sampler2D uTexture;
-    uniform int uMode; // 0 = normal, 1 = little planet
-
-    const float PI = 3.1415926;
-    const float PI2 = 6.2831852;
-
-    vec2 stereographicProjection(vec2 uv) {
-        vec2 xy = (uv * 2.0 - 1.0); // Convert from [0,1] to [-1,1]
-        float r2 = dot(xy, xy);
-
-        if (r2 > 1.0) discard;
-
-        // Inverse stereographic projection to 3D direction
-        vec3 dir = normalize(vec3(
-            2.0 * xy.x,
-            2.0 * xy.y,
-            1.0 - r2
-        ));
-
-        // Apply rotation: +90° pitch down (align center of disc to nadir)
-        vec3 rotatedDir = vec3(
-            dir.x,
-            dir.z,
-            -dir.y
-        );
-
-        float lon = atan(rotatedDir.x, rotatedDir.z);
-        float lat = asin(clamp(rotatedDir.y, -1.0, 1.0));
-
-        // Map to equirectangular texture space
-        vec2 texUV;
-        texUV.x = mod(lon / PI2 + 0.5, 1.0);
-        texUV.y = 0.5 - lat / PI;
-
-        return texUV;
-    }
+    uniform float uYaw;
+    uniform float uPitch;
+    uniform float uProjectionScale; // >1.0 is zoomed in, <1.0 is zoomed out
+    varying vec2 vUv;
 
     void main() {
-        vec2 uv = vUv;
+        vec2 ndc = (vUv - 0.5) * 2.0;
+        float r2 = dot(ndc, ndc);
+        float scale = uProjectionScale * (2.0 / (r2 + 1.0));
+        vec3 dir = normalize(vec3(ndc * scale, scale - 1.0));
 
-        if (uMode == 1) {
-            uv = stereographicProjection(vUv);
-        }
+        float cy = cos(uYaw), sy = sin(uYaw);
+        float cp = cos(uPitch), sp = sin(uPitch);
 
-        gl_FragColor = texture2D(uTexture, vec2(uv.s, 1.0 - uv.t), -3.0);
+        mat3 rotY = mat3(cy, 0.0, -sy, 0.0, 1.0, 0.0, sy, 0.0, cy);
+        mat3 rotX = mat3(1.0, 0.0, 0.0, 0.0, cp, -sp, 0.0, sp, cp);
+
+        dir = rotY * rotX * dir;
+
+        float longitude = atan(dir.z, dir.x);
+        float latitude = asin(clamp(dir.y, -1.0, 1.0));
+
+        vec2 texUv = vec2(
+            0.5 - longitude / (2.0 * PI),
+            0.5 - latitude / PI
+        );
+  
+        gl_FragColor = texture2D(uTexture, texUv);
     }
 `;
 
-const DAMPING = 0.95; // Controls inertia decay
+const DAMPING = 0.98; // Controls inertia decay
 const ZOOM_DAMPING = 0.5;
-
-type SphereGeometry = {
-    positions: Float32Array<ArrayBuffer>;
-    uvs: Float32Array<ArrayBuffer>;
-    indices: Uint16Array<ArrayBuffer>;
-};
 
 export default class Pano extends HTMLElement {
     private canvas: HTMLCanvasElement;
     private gl: WebGLRenderingContext;
-    private sphere: SphereGeometry;
-    private uProjectionLoc: WebGLUniformLocation;
-    private uViewLoc: WebGLUniformLocation;
-    private uModeLoc: WebGLUniformLocation;
+    private program: WebGLProgram;
+    private texture: WebGLTexture;
+    private positionLoc: number;
+    private uvLoc: number;
+    private posBuf: WebGLBuffer;
+    private uvBuf: WebGLBuffer;
+    private idxBuf: WebGLBuffer;
+    private uTexture: WebGLUniformLocation;
+    private uYaw: WebGLUniformLocation;
+    private uPitch: WebGLUniformLocation;
+    private uProjectionScale: WebGLUniformLocation;
 
     // Camera controls
     private yaw = 0;
     private pitch = 0;
-    private fov = 75;
+    private projectionScale = 1;
     private yawVelocity = 0;
     private pitchVelocity = 0;
     private zoomVelocity = 0;
@@ -137,46 +121,48 @@ export default class Pano extends HTMLElement {
         this.shadowRoot?.append(style, this.canvas);
 
         // GL
-        const program = this.createProgram(vsSource, fsSource);
-        this.gl.useProgram(program);
+        this.program = this.createProgram(
+            vertexShaderSource,
+            fragmentShaderSource
+        );
+        this.gl.useProgram(this.program);
 
-        this.sphere = this.createSphereGeometry(64, 128);
+        this.texture = this.gl.createTexture();
 
-        const positionLoc = this.gl.getAttribLocation(program, 'position');
-        this.uProjectionLoc = this.gl.getUniformLocation(
-            program,
-            'uProjection'
+        this.uTexture = this.gl.getUniformLocation(this.program, 'uTexture')!;
+        this.uYaw = this.gl.getUniformLocation(this.program, 'uYaw')!;
+        this.uPitch = this.gl.getUniformLocation(this.program, 'uPitch')!;
+        this.uProjectionScale = this.gl.getUniformLocation(
+            this.program,
+            'uProjectionScale'
         )!;
-        this.uViewLoc = this.gl.getUniformLocation(program, 'uView')!;
-        this.uModeLoc = this.gl.getUniformLocation(program, 'uMode')!;
 
-        const positionBuffer = this.createBuffer(
-            this.sphere.positions,
+        const quadPositions = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+        const quadUVs = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
+        const indices = new Uint16Array([0, 1, 2, 2, 1, 3]);
+
+        this.posBuf = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.posBuf);
+        this.gl.bufferData(
             this.gl.ARRAY_BUFFER,
+            quadPositions,
             this.gl.STATIC_DRAW
         );
-        this.gl.enableVertexAttribArray(positionLoc);
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer);
-        this.gl.vertexAttribPointer(positionLoc, 3, this.gl.FLOAT, false, 0, 0);
 
-        const uvBuffer = this.createBuffer(
-            this.sphere.uvs,
-            this.gl.ARRAY_BUFFER,
-            this.gl.STATIC_DRAW
-        );
-        const uvLoc = this.gl.getAttribLocation(program, 'uv');
-        this.gl.enableVertexAttribArray(uvLoc);
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, uvBuffer);
-        this.gl.vertexAttribPointer(uvLoc, 2, this.gl.FLOAT, false, 0, 0);
+        this.uvBuf = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuf);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, quadUVs, this.gl.STATIC_DRAW);
 
-        this.createBuffer(
-            this.sphere.indices,
+        this.idxBuf = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.idxBuf);
+        this.gl.bufferData(
             this.gl.ELEMENT_ARRAY_BUFFER,
+            indices,
             this.gl.STATIC_DRAW
         );
 
-        // Disable culling so we render inside of the sphere
-        this.gl.disable(this.gl.CULL_FACE);
+        this.positionLoc = this.gl.getAttribLocation(this.program, 'position');
+        this.uvLoc = this.gl.getAttribLocation(this.program, 'uv');
     }
 
     connectedCallback() {
@@ -197,24 +183,38 @@ export default class Pano extends HTMLElement {
         this.resize();
 
         // Texture
-        const texture = this.gl.createTexture();
+        // this.texture = this.gl.createTexture();
         const image = new Image();
+        image.src = src;
         image.crossOrigin = '';
         image.onload = () => {
-            this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
-            this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, false);
-            this.gl.texImage2D(
-                this.gl.TEXTURE_2D,
+            const { gl } = this;
+
+            gl.bindTexture(gl.TEXTURE_2D, this.texture);
+            gl.texImage2D(
+                gl.TEXTURE_2D,
                 0,
-                this.gl.RGB,
-                this.gl.RGB,
-                this.gl.UNSIGNED_BYTE,
+                gl.RGB,
+                gl.RGB,
+                gl.UNSIGNED_BYTE,
                 image
             );
-            this.gl.generateMipmap(this.gl.TEXTURE_2D);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); // wrap horizontally
+            gl.texParameteri(
+                gl.TEXTURE_2D,
+                gl.TEXTURE_WRAP_T,
+                gl.CLAMP_TO_EDGE
+            );
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+            const error = gl.getError();
+            if (error !== gl.NO_ERROR) {
+                console.error('WebGL texture upload error:', error);
+            }
+            // this.gl.generateMipmap(this.gl.TEXTURE_2D);   ???????
             requestAnimationFrame(() => this.render());
         };
-        image.src = src;
 
         // MOUSE
         this.canvas.addEventListener('mousedown', (e) => {
@@ -233,7 +233,7 @@ export default class Pano extends HTMLElement {
         this.canvas.addEventListener('mouseleave', () => this.endInteraction());
 
         this.canvas.addEventListener('wheel', (e) => {
-            this.zoomVelocity += e.deltaY * 0.1;
+            this.zoomVelocity += e.deltaY * 0.001;
             e.preventDefault();
         });
 
@@ -315,62 +315,6 @@ export default class Pano extends HTMLElement {
         return program;
     }
 
-    private createBuffer(
-        data: AllowSharedBufferSource | null,
-        target: number,
-        usage: number
-    ) {
-        const buffer = this.gl.createBuffer();
-        this.gl.bindBuffer(target, buffer);
-        this.gl.bufferData(target, data, usage);
-        return buffer;
-    }
-
-    private createSphereGeometry(
-        latBands: number,
-        lonBands: number
-    ): SphereGeometry {
-        const positions = [];
-        const uvs = [];
-        const indices = [];
-
-        for (let lat = 0; lat <= latBands; ++lat) {
-            const theta = (lat * Math.PI) / latBands;
-            const sinTheta = Math.sin(theta);
-            const cosTheta = Math.cos(theta);
-
-            for (let lon = 0; lon <= lonBands; ++lon) {
-                const phi = (lon * 2 * Math.PI) / lonBands;
-                const sinPhi = Math.sin(phi);
-                const cosPhi = Math.cos(phi);
-
-                const x = cosPhi * sinTheta;
-                const y = -cosTheta;
-                const z = sinPhi * sinTheta;
-                const u = lon / lonBands;
-                const v = lat / latBands;
-
-                positions.push(x, y, z);
-                uvs.push(u, v);
-            }
-        }
-
-        for (let lat = 0; lat < latBands; ++lat) {
-            for (let lon = 0; lon < lonBands; ++lon) {
-                const first = lat * (lonBands + 1) + lon;
-                const second = first + lonBands + 1;
-                indices.push(first, second, first + 1);
-                indices.push(second, second + 1, first + 1);
-            }
-        }
-
-        return {
-            positions: new Float32Array(positions),
-            uvs: new Float32Array(uvs),
-            indices: new Uint16Array(indices),
-        };
-    }
-
     private startInteraction(x: number, y: number) {
         this.isDragging = true;
         this.lastX = x;
@@ -437,12 +381,13 @@ export default class Pano extends HTMLElement {
             this.pitchVelocity = 0;
         }
 
-        this.fov += this.zoomVelocity;
+        this.projectionScale += this.zoomVelocity;
         this.zoomVelocity *= ZOOM_DAMPING;
         if (Math.abs(this.zoomVelocity) < 0.05) {
             this.zoomVelocity = 0;
         }
-        this.fov = Math.max(30, Math.min(100, this.fov));
+        this.projectionScale = Math.max(0.6, Math.min(10, this.projectionScale));
+        console.log(this.projectionScale)
 
         const keyStep = 0.1; // how fast it accelerates
         const zoomStep = 0.1;
@@ -474,95 +419,47 @@ export default class Pano extends HTMLElement {
         this.pitchVelocity += this.pitchAccel;
         this.zoomVelocity += this.zoomAccel;
 
-        this.resize();
+        // this.resize();
 
-        this.gl.clearColor(0, 0, 0, 1);
-        this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+        this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
-        const aspect = this.canvas.width / this.canvas.height;
-        const projection = this.getProjectionMatrix(this.fov, aspect, 0.1, 100);
-        const view = this.getViewMatrix(this.yaw, this.pitch);
+        this.gl.useProgram(this.program);
 
-        this.gl.uniformMatrix4fv(this.uViewLoc, false, view);
-        this.gl.uniformMatrix4fv(this.uProjectionLoc, false, projection);
-        const currentMode = 0; // 0 - perspective, 1 - stereographic
-        this.gl.uniform1i(this.uModeLoc, currentMode);
-
-        this.gl.drawElements(
-            this.gl.TRIANGLES,
-            this.sphere.indices.length,
-            this.gl.UNSIGNED_SHORT,
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.posBuf);
+        this.gl.enableVertexAttribArray(this.positionLoc);
+        this.gl.vertexAttribPointer(
+            this.positionLoc,
+            2,
+            this.gl.FLOAT,
+            false,
+            0,
             0
         );
+
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuf);
+        this.gl.enableVertexAttribArray(this.uvLoc);
+        this.gl.vertexAttribPointer(this.uvLoc, 2, this.gl.FLOAT, false, 0, 0);
+
+        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.idxBuf);
+
+        this.gl.uniform1f(this.uYaw, this.degToRad(this.yaw));
+        this.gl.uniform1f(this.uPitch, this.degToRad(this.pitch));
+        this.gl.uniform1f(this.uProjectionScale, this.projectionScale);
+
+        this.gl.activeTexture(this.gl.TEXTURE0);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+        this.gl.uniform1i(this.uTexture, 0);
+
+        this.gl.drawElements(this.gl.TRIANGLES, 6, this.gl.UNSIGNED_SHORT, 0);
+
         requestAnimationFrame(() => this.render());
     }
 
     // Math utilities
     private degToRad(d: number) {
         return (d * Math.PI) / 180;
-    }
-
-    private getProjectionMatrix(
-        fov: number,
-        aspect: number,
-        near: number,
-        far: number
-    ) {
-        const f = 1.0 / Math.tan(this.degToRad(fov) / 2);
-        // prettier-ignore
-        return new Float32Array([
-            f / aspect, 0, 0, 0,
-            0, f, 0, 0,
-            0, 0, (near + far) / (near - far), -1,
-            0, 0, (2 * near * far) / (near - far), 0,
-        ]);
-    }
-
-    private getViewMatrix(yawDeg: number, pitchDeg: number) {
-        const yaw = this.degToRad(yawDeg);
-        const pitch = this.degToRad(pitchDeg);
-
-        // Calculate direction vector
-        const x = Math.cos(pitch) * Math.sin(yaw);
-        const y = Math.sin(pitch);
-        const z = Math.cos(pitch) * Math.cos(yaw);
-
-        const eye = [0, 0, 0];
-        const center = [x, y, z];
-        const up = [0, 1, 0];
-
-        return this.lookAt(eye, center, up);
-    }
-
-    private lookAt(eye: number[], center: number[], up: number[]) {
-        const f = this.normalizeVector([
-            center[0] - eye[0],
-            center[1] - eye[1],
-            center[2] - eye[2],
-        ]);
-        const s = this.normalizeVector(this.cross(f, up));
-        const u = this.cross(s, f);
-
-        // prettier-ignore
-        return new Float32Array([
-            s[0], u[0], -f[0], 0,
-            s[1], u[1], -f[1], 0,
-            s[2], u[2], -f[2], 0,
-            0, 0, 0, 1,
-        ]);
-    }
-
-    private normalizeVector(v: number[]) {
-        const len = Math.hypot(v[0], v[1], v[2]);
-        return [v[0] / len, v[1] / len, v[2] / len];
-    }
-
-    private cross(a: number[], b: number[]) {
-        return [
-            a[1] * b[2] - a[2] * b[1],
-            a[2] * b[0] - a[0] * b[2],
-            a[0] * b[1] - a[1] * b[0],
-        ];
     }
 }
 

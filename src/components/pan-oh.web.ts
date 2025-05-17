@@ -272,6 +272,8 @@ export default class Pano extends HTMLElement {
         window.addEventListener('keyup', (e) => {
             this.keys[e.key.toLowerCase()] = false;
         });
+
+        window.addEventListener('resize', () => this.resize());
     }
 
     get yaw(): number {
@@ -367,17 +369,43 @@ export default class Pano extends HTMLElement {
         requestAnimationFrame(animate);
     }
 
-    initPlayer(src: string) {
-        window.addEventListener('resize', () => this.resize());
+    initPlayer(srcString: string) {
         this.resize();
 
-        // Texture
+        const sources = srcString.trim().split(/\s+/);
+        if (sources.length === 0) return;
+
+        // Start loading the first (lowest) resolution
+        this.loadTextureFromUrl(sources[0], () => {
+            // Start rendering once the first texture is loaded
+            requestAnimationFrame(() => this.render());
+
+            // Then load higher resolutions in sequence if there are any
+            if (sources.length > 1) {
+                this.loadHigherResolutions(sources.slice(1));
+            }
+        });
+    }
+
+    private loadHigherResolutions(sources: string[]) {
+        if (sources.length === 0) return;
+
+        // Load the next resolution in the background
+        this.loadTextureFromUrl(sources[0], () => {
+            // Continue with remaining sources
+            this.loadHigherResolutions(sources.slice(1));
+        });
+    }
+
+    private loadTextureFromUrl(url: string, callback: () => void) {
         const image = new Image();
-        image.src = src;
+        image.src = url;
         image.crossOrigin = '';
+
         image.onload = () => {
             const { gl } = this;
 
+            // Use the existing texture object
             gl.bindTexture(gl.TEXTURE_2D, this.texture);
             gl.texImage2D(
                 gl.TEXTURE_2D,
@@ -387,7 +415,7 @@ export default class Pano extends HTMLElement {
                 gl.UNSIGNED_BYTE,
                 image
             );
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); // wrap horizontally
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
             gl.texParameteri(
                 gl.TEXTURE_2D,
                 gl.TEXTURE_WRAP_T,
@@ -400,7 +428,13 @@ export default class Pano extends HTMLElement {
             if (error !== gl.NO_ERROR) {
                 console.error('WebGL texture upload error:', error);
             }
-            requestAnimationFrame(() => this.render());
+
+            // Execute callback after texture is loaded
+            callback();
+        };
+
+        image.onerror = () => {
+            console.error(`Failed to load image: ${url}`);
         };
     }
 

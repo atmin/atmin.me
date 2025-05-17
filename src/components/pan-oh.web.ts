@@ -18,27 +18,27 @@ const fragmentShaderSource = glsl`
     uniform sampler2D uTexture;
     uniform float uYaw;
     uniform float uPitch;
-    uniform float uProjectionScale; // >1.0 is zoomed in, <1.0 is zoomed out
+    uniform float uZoom;
     varying vec2 vUv;
 
     void main() {
         vec3 dir;
         
         // Define transition range
-        const float TRANSITION_START = 1.4;
-        const float TRANSITION_END = 2.6;
+        const float TRANSITION_START = 1.6;
+        const float TRANSITION_END = 2.4;
         
         // Calculate blend factor (0 = stereographic, 1 = perspective)
-        float blend = smoothstep(TRANSITION_START, TRANSITION_END, uProjectionScale);
+        float blend = smoothstep(TRANSITION_START, TRANSITION_END, uZoom);
         
         // Stereographic projection calculation
         vec2 ndc = (vUv - 0.5) * 2.0;
         float r2 = dot(ndc, ndc);
-        float stereoScale = uProjectionScale * (2.0 / (r2 + 1.0));
+        float stereoScale = uZoom * (2.0 / (r2 + 1.0));
         vec3 stereoDir = vec3(ndc * stereoScale, stereoScale - 1.0);
         
         // Perspective projection calculation
-        float fov = uProjectionScale - 1.0;
+        float fov = uZoom - 1.0;
         vec3 perspDir = vec3(ndc.x, ndc.y, fov);
         
         // Blend between the two directions
@@ -80,12 +80,12 @@ export default class Pano extends HTMLElement {
     private uTexture: WebGLUniformLocation;
     private uYaw: WebGLUniformLocation;
     private uPitch: WebGLUniformLocation;
-    private uProjectionScale: WebGLUniformLocation;
+    private uZoom: WebGLUniformLocation;
 
     // Camera controls
     private yaw = 0;
     private pitch = 0;
-    private projectionScale = 1;
+    private zoom = 2;
     private yawVelocity = 0;
     private pitchVelocity = 0;
     private zoomVelocity = 0;
@@ -149,10 +149,7 @@ export default class Pano extends HTMLElement {
         this.uTexture = this.gl.getUniformLocation(this.program, 'uTexture')!;
         this.uYaw = this.gl.getUniformLocation(this.program, 'uYaw')!;
         this.uPitch = this.gl.getUniformLocation(this.program, 'uPitch')!;
-        this.uProjectionScale = this.gl.getUniformLocation(
-            this.program,
-            'uProjectionScale'
-        )!;
+        this.uZoom = this.gl.getUniformLocation(this.program, 'uZoom')!;
 
         const quadPositions = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
         const quadUVs = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
@@ -398,13 +395,13 @@ export default class Pano extends HTMLElement {
             this.pitchVelocity = 0;
         }
 
-        this.projectionScale += this.zoomVelocity;
+        this.zoom += this.zoomVelocity;
         this.zoomVelocity *= ZOOM_DAMPING;
         if (Math.abs(this.zoomVelocity) < 0.05) {
             this.zoomVelocity = 0;
         }
-        this.projectionScale = Math.max(0.6, Math.min(10, this.projectionScale));
-        console.log(this.projectionScale)
+        this.zoom = Math.max(0.6, Math.min(10, this.zoom));
+        console.log(this.zoom);
 
         const keyStep = 0.1; // how fast it accelerates
         const zoomStep = 0.1;
@@ -463,7 +460,7 @@ export default class Pano extends HTMLElement {
 
         this.gl.uniform1f(this.uYaw, this.degToRad(this.yaw));
         this.gl.uniform1f(this.uPitch, this.degToRad(this.pitch));
-        this.gl.uniform1f(this.uProjectionScale, this.projectionScale);
+        this.gl.uniform1f(this.uZoom, this.zoom);
 
         this.gl.activeTexture(this.gl.TEXTURE0);
         this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);

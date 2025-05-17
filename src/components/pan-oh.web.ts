@@ -14,28 +14,37 @@ const fragmentShaderSource = glsl`
     precision mediump float;
 
     const float PI = 3.1415926535;
+    const float TRANSITION_START = 1.6;
+    const float TRANSITION_END = 2.4;
 
     uniform sampler2D uTexture;
     uniform float uYaw;
     uniform float uPitch;
     uniform float uZoom;
+    uniform float uAspectRatio;
     varying vec2 vUv;
 
     void main() {
-        vec3 dir;
+        // Apply aspect ratio correction to normalized device coordinates
+        vec2 ndc = (vUv - 0.5) * 2.0;
         
-        // Define transition range
-        const float TRANSITION_START = 1.6;
-        const float TRANSITION_END = 2.4;
+        if (uAspectRatio > 1.0) {
+            // Width is larger than height (landscape)
+            ndc.x /= uAspectRatio;
+        } else {
+            // Height is larger than width (portrait)
+            ndc.y *= uAspectRatio;
+        }
         
         // Calculate blend factor (0 = stereographic, 1 = perspective)
         float blend = smoothstep(TRANSITION_START, TRANSITION_END, uZoom);
         
+        vec3 dir;
+        
         // Stereographic projection calculation
-        vec2 ndc = (vUv - 0.5) * 2.0;
         float r2 = dot(ndc, ndc);
         float stereoScale = uZoom * (2.0 / (r2 + 1.0));
-        vec3 stereoDir = vec3(ndc * stereoScale, stereoScale - 1.0);
+        vec3 stereoDir = vec3(ndc.x * stereoScale, ndc.y * stereoScale, stereoScale - 1.0);
         
         // Perspective projection calculation
         float fov = uZoom - 1.0;
@@ -81,6 +90,7 @@ export default class Pano extends HTMLElement {
     private uYaw: WebGLUniformLocation;
     private uPitch: WebGLUniformLocation;
     private uZoom: WebGLUniformLocation;
+    private uAspectRatio: WebGLUniformLocation;
 
     // Camera controls
     private yaw = 0;
@@ -150,6 +160,10 @@ export default class Pano extends HTMLElement {
         this.uYaw = this.gl.getUniformLocation(this.program, 'uYaw')!;
         this.uPitch = this.gl.getUniformLocation(this.program, 'uPitch')!;
         this.uZoom = this.gl.getUniformLocation(this.program, 'uZoom')!;
+        this.uAspectRatio = this.gl.getUniformLocation(
+            this.program,
+            'uAspectRatio'
+        )!;
 
         const quadPositions = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
         const quadUVs = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
@@ -461,6 +475,10 @@ export default class Pano extends HTMLElement {
         this.gl.uniform1f(this.uYaw, this.degToRad(this.yaw));
         this.gl.uniform1f(this.uPitch, this.degToRad(this.pitch));
         this.gl.uniform1f(this.uZoom, this.zoom);
+        this.gl.uniform1f(
+            this.uAspectRatio,
+            this.canvas.height / this.canvas.width
+        );
 
         this.gl.activeTexture(this.gl.TEXTURE0);
         this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);

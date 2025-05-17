@@ -14,7 +14,7 @@ const fragmentShaderSource = glsl`
     precision mediump float;
 
     const float PI = 3.1415926535;
-    
+
     uniform sampler2D uTexture;
     uniform float uYaw;
     uniform float uPitch;
@@ -22,10 +22,27 @@ const fragmentShaderSource = glsl`
     varying vec2 vUv;
 
     void main() {
+        vec3 dir;
+        
+        // Define transition range
+        const float TRANSITION_START = 1.4;
+        const float TRANSITION_END = 2.6;
+        
+        // Calculate blend factor (0 = stereographic, 1 = perspective)
+        float blend = smoothstep(TRANSITION_START, TRANSITION_END, uProjectionScale);
+        
+        // Stereographic projection calculation
         vec2 ndc = (vUv - 0.5) * 2.0;
         float r2 = dot(ndc, ndc);
-        float scale = uProjectionScale * (2.0 / (r2 + 1.0));
-        vec3 dir = normalize(vec3(ndc * scale, scale - 1.0));
+        float stereoScale = uProjectionScale * (2.0 / (r2 + 1.0));
+        vec3 stereoDir = vec3(ndc * stereoScale, stereoScale - 1.0);
+        
+        // Perspective projection calculation
+        float fov = uProjectionScale - 1.0;
+        vec3 perspDir = vec3(ndc.x, ndc.y, fov);
+        
+        // Blend between the two directions
+        dir = normalize(mix(stereoDir, perspDir, blend));
 
         float cy = cos(uYaw), sy = sin(uYaw);
         float cp = cos(uPitch), sp = sin(uPitch);
@@ -42,7 +59,7 @@ const fragmentShaderSource = glsl`
             0.5 - longitude / (2.0 * PI),
             0.5 - latitude / PI
         );
-  
+
         gl_FragColor = texture2D(uTexture, texUv);
     }
 `;

@@ -294,7 +294,12 @@ export default class Pano extends HTMLElement {
                 this.moveInteraction(clientX, clientY);
             } else if (e.touches.length === 2) {
                 const dist = getTouchDist(e);
-                this.zoomVelocity -= (dist - lastTouchDist) * 0.01;
+                const distDelta = dist - lastTouchDist;
+                const scaledDelta =
+                    Math.sign(distDelta) *
+                    Math.pow(Math.abs(distDelta), 0.8) *
+                    0.005;
+                this.zoomVelocity += scaledDelta;
                 lastTouchDist = dist;
             }
             e.preventDefault();
@@ -362,12 +367,21 @@ export default class Pano extends HTMLElement {
         this.interactionHistory = [{ x, y, time: performance.now() }];
     }
 
+    private getZoomFactor(): number {
+        // At zoom=1, factor=1. At higher zoom levels, the factor decreases
+        return 1.0 / this.zoom;
+    }
+
     private moveInteraction(x: number, y: number) {
         const dx = x - this.lastX;
         const dy = y - this.lastY;
 
-        this.yaw += dx * 0.3;
-        this.pitch += dy * 0.3;
+        // Apply zoom-dependent sensitivity
+        const zoomFactor = this.getZoomFactor();
+        const baseSensitivity = 0.3;
+
+        this.yaw -= dx * baseSensitivity * zoomFactor;
+        this.pitch += dy * baseSensitivity * zoomFactor;
 
         this.pitch = Math.max(-89, Math.min(89, this.pitch));
         this.lastX = x;
@@ -395,8 +409,10 @@ export default class Pano extends HTMLElement {
             const speed = Math.sqrt(vx * vx + vy * vy);
 
             if (speed > 500) {
-                this.yawVelocity = vx * 0.002;
-                this.pitchVelocity = vy * 0.002;
+                // Apply zoom-dependent sensitivity to inertia too
+                const zoomFactor = this.getZoomFactor();
+                this.yawVelocity = -vx * 0.002 * zoomFactor;
+                this.pitchVelocity = vy * 0.002 * zoomFactor;
             }
         }
         this.interactionHistory = [];
@@ -426,13 +442,16 @@ export default class Pano extends HTMLElement {
         }
         this.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.zoom));
 
-        const keyStep = 0.1; // how fast it accelerates
-        const zoomStep = 0.1;
+        // Get zoom-adjusted sensitivity for keyboard controls
+        const zoomFactor = this.getZoomFactor();
+        const baseKeyStep = 0.1;
+        const keyStep = baseKeyStep * zoomFactor;
+        const zoomStep = 0.01;
 
         if (this.keys['arrowleft'] || this.keys['a']) {
-            this.yawAccel = keyStep;
-        } else if (this.keys['arrowright'] || this.keys['d']) {
             this.yawAccel = -keyStep;
+        } else if (this.keys['arrowright'] || this.keys['d']) {
+            this.yawAccel = keyStep;
         } else this.yawAccel = 0;
 
         if (this.keys['arrowup'] || this.keys['w']) {
@@ -444,9 +463,9 @@ export default class Pano extends HTMLElement {
         }
 
         if (this.keys['='] || this.keys['+']) {
-            this.zoomAccel = -zoomStep;
-        } else if (this.keys['-'] || this.keys['_']) {
             this.zoomAccel = zoomStep;
+        } else if (this.keys['-'] || this.keys['_']) {
+            this.zoomAccel = -zoomStep;
         } else {
             this.zoomAccel = 0;
         }

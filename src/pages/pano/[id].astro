@@ -42,6 +42,38 @@ const src = (await hiResSrc(id)).default.src;
         width: 100%;
         height: 100%;
     }
+
+    @keyframes panorama-tour {
+        0% {
+            --pan-yaw: 0;
+            --pan-pitch: 0;
+            --pan-zoom: 1;
+        }
+        25% {
+            --pan-yaw: 90;
+            --pan-pitch: 15;
+            --pan-zoom: 2;
+        }
+        50% {
+            --pan-yaw: 180;
+            --pan-pitch: -15;
+            --pan-zoom: 3;
+        }
+        75% {
+            --pan-yaw: 270;
+            --pan-pitch: 15;
+            --pan-zoom: 2;
+        }
+        100% {
+            --pan-yaw: 360;
+            --pan-pitch: 0;
+            --pan-zoom: 1;
+        }
+    }
+
+    .transition {
+        animation: panorama-tour 1s;
+    }
 </style>
 
 <script src="../../components/pan-oh.web"></script>

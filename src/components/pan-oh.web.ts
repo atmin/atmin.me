@@ -202,208 +202,6 @@ export default class Pano extends HTMLElement {
 
         this.positionLoc = this.gl.getAttribLocation(this.program, 'position');
         this.uvLoc = this.gl.getAttribLocation(this.program, 'uv');
-    }
-
-    get yaw(): number {
-        return this._yaw;
-    }
-
-    set yaw(value: number) {
-        if (Math.abs(this._yaw - value) > 0.001) {
-            this._yaw = value;
-            this.style.setProperty('--pan-yaw', value.toString());
-        }
-    }
-
-    get pitch(): number {
-        return this._pitch;
-    }
-
-    set pitch(value: number) {
-        const clampedValue = Math.max(-89, Math.min(89, value));
-        if (Math.abs(this._pitch - clampedValue) > 0.001) {
-            this._pitch = clampedValue;
-            this.style.setProperty('--pan-pitch', clampedValue.toString());
-        }
-    }
-
-    get zoom(): number {
-        return this._zoom;
-    }
-
-    set zoom(value: number) {
-        const clampedValue = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
-        if (Math.abs(this._zoom - clampedValue) > 0.001) {
-            this._zoom = clampedValue;
-            this.style.setProperty('--pan-zoom', clampedValue.toString());
-        }
-    }
-
-    connectedCallback() {
-        // Read initial CSS custom properties from inline styles
-        this.readInitialCSSProperties();
-
-        // Set up observer for future changes
-        this.setupCSSObserver();
-
-        const src = this.getAttribute('src');
-        if (src) {
-            this.initPlayer(src);
-        }
-    }
-
-    private readInitialCSSProperties() {
-        // First check inline style attribute directly
-        if (this.hasAttribute('style')) {
-            const style = this.getAttribute('style') ?? '';
-
-            // Parse inline styles for our custom properties
-            const yawMatch = /--pan-yaw:\s*([-\d.]+)/i.exec(style);
-            if (yawMatch && yawMatch[1]) {
-                const yaw = parseFloat(yawMatch[1]);
-                if (!isNaN(yaw)) {
-                    this._yaw = yaw;
-                    console.log('Initial yaw set to:', yaw);
-                }
-            }
-
-            const pitchMatch = /--pan-pitch:\s*([-\d.]+)/i.exec(style);
-            if (pitchMatch && pitchMatch[1]) {
-                const pitch = parseFloat(pitchMatch[1]);
-                if (!isNaN(pitch)) {
-                    this._pitch = Math.max(-89, Math.min(89, pitch));
-                    console.log('Initial pitch set to:', this._pitch);
-                }
-            }
-
-            const zoomMatch = /--pan-zoom:\s*([-\d.]+)/i.exec(style);
-            if (zoomMatch && zoomMatch[1]) {
-                const zoom = parseFloat(zoomMatch[1]);
-                if (!isNaN(zoom)) {
-                    this._zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
-                    console.log('Initial zoom set to:', this._zoom);
-                }
-            }
-        }
-
-        // Set our CSS variables to match the current state
-        // This ensures the CSS reflects our internal state
-        this.updateCSSFromProperties();
-    }
-
-    private setupCSSObserver() {
-        // Create a style observer to watch for CSS variable changes
-        const observer = new MutationObserver(() => {
-            // Use requestAnimationFrame to ensure styles are computed
-            requestAnimationFrame(() => this.updateFromCSS());
-        });
-
-        observer.observe(this, {
-            attributes: true,
-            attributeFilter: ['style'],
-        });
-
-        // Also listen for CSS transitions/animations
-        this.addEventListener('transitionend', () => this.updateFromCSS());
-        this.addEventListener('animationend', () => this.updateFromCSS());
-
-        // Ensure we update from CSS after a short delay
-        // This catches any styles applied via stylesheets
-        setTimeout(() => this.updateFromCSS(), 50);
-    }
-
-    private updateCSSFromProperties() {
-        // Update CSS custom properties to match internal state
-        this.style.setProperty('--pan-yaw', this._yaw.toString());
-        this.style.setProperty('--pan-pitch', this._pitch.toString());
-        this.style.setProperty('--pan-zoom', this._zoom.toString());
-    }
-
-    private updateFromCSS() {
-        // Get values from CSS custom properties
-        const computedStyle = getComputedStyle(this);
-        const yawStr = computedStyle.getPropertyValue('--pan-yaw').trim();
-        const pitchStr = computedStyle.getPropertyValue('--pan-pitch').trim();
-        const zoomStr = computedStyle.getPropertyValue('--pan-zoom').trim();
-
-        let changed = false;
-
-        // Parse and apply values if they exist
-        if (yawStr) {
-            const yaw = parseFloat(yawStr);
-            if (!isNaN(yaw) && Math.abs(this._yaw - yaw) > 0.001) {
-                this._yaw = yaw;
-                changed = true;
-                console.log('Updated yaw from CSS:', yaw);
-            }
-        }
-
-        if (pitchStr) {
-            const pitch = parseFloat(pitchStr);
-            if (!isNaN(pitch) && Math.abs(this._pitch - pitch) > 0.001) {
-                this._pitch = Math.max(-89, Math.min(89, pitch));
-                changed = true;
-                console.log('Updated pitch from CSS:', this._pitch);
-            }
-        }
-
-        if (zoomStr) {
-            const zoom = parseFloat(zoomStr);
-            if (!isNaN(zoom) && Math.abs(this._zoom - zoom) > 0.001) {
-                this._zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
-                changed = true;
-                console.log('Updated zoom from CSS:', this._zoom);
-            }
-        }
-
-        // If anything changed, we need to render
-        if (changed) {
-            // Force a render if needed
-            this.lastYaw = this._yaw - 1; // Ensure difference is detected
-        }
-    }
-
-    attributeChangedCallback(name: string, oldValue: string, newValue: string) {
-        if (name === 'src' && oldValue !== newValue) {
-            this.initPlayer(newValue);
-        }
-    }
-
-    initPlayer(src: string) {
-        window.addEventListener('resize', () => this.resize());
-        this.resize();
-
-        // Texture
-        const image = new Image();
-        image.src = src;
-        image.crossOrigin = '';
-        image.onload = () => {
-            const { gl } = this;
-
-            gl.bindTexture(gl.TEXTURE_2D, this.texture);
-            gl.texImage2D(
-                gl.TEXTURE_2D,
-                0,
-                gl.RGB,
-                gl.RGB,
-                gl.UNSIGNED_BYTE,
-                image
-            );
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); // wrap horizontally
-            gl.texParameteri(
-                gl.TEXTURE_2D,
-                gl.TEXTURE_WRAP_T,
-                gl.CLAMP_TO_EDGE
-            );
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-            const error = gl.getError();
-            if (error !== gl.NO_ERROR) {
-                console.error('WebGL texture upload error:', error);
-            }
-            requestAnimationFrame(() => this.render());
-        };
 
         // MOUSE
         this.canvas.addEventListener('mousedown', (e) => {
@@ -474,6 +272,136 @@ export default class Pano extends HTMLElement {
         window.addEventListener('keyup', (e) => {
             this.keys[e.key.toLowerCase()] = false;
         });
+    }
+
+    get yaw(): number {
+        return this._yaw;
+    }
+    set yaw(value) {
+        this._yaw = value;
+        this.setAttribute('yaw', value.toString());
+    }
+
+    get pitch(): number {
+        return this._pitch;
+    }
+    set pitch(value) {
+        const clamped = Math.max(-89, Math.min(89, value));
+        this._pitch = clamped;
+        this.setAttribute('pitch', clamped.toString());
+    }
+
+    get zoom(): number {
+        return this._zoom;
+    }
+    set zoom(value) {
+        const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
+        this._zoom = clamped;
+        this.setAttribute('zoom', clamped.toString());
+    }
+
+    connectedCallback() {
+        const src = this.getAttribute('src');
+        if (src) {
+            this.initPlayer(src);
+        }
+    }
+
+    attributeChangedCallback(name: string, oldValue: string, newValue: string) {
+        if (oldValue === newValue) return;
+
+        if (name === 'src' && oldValue !== newValue) {
+            this.initPlayer(newValue);
+        } else if (name === 'yaw') {
+            this._yaw = parseFloat(newValue) || 0;
+        } else if (name === 'pitch') {
+            this._pitch = Math.max(
+                -89,
+                Math.min(89, parseFloat(newValue) || 0)
+            );
+        } else if (name === 'zoom') {
+            this._zoom = Math.max(
+                MIN_ZOOM,
+                Math.min(MAX_ZOOM, parseFloat(newValue) || 2)
+            );
+        }
+    }
+
+    animateTo(
+        targetYaw: number,
+        targetPitch: number,
+        targetZoom: number,
+        duration = 1000
+    ) {
+        const startYaw = this.yaw;
+        const startPitch = this.pitch;
+        const startZoom = this.zoom;
+        const startTime = performance.now();
+
+        const animate = (currentTime: number) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Use easeInOutCubic for smooth animation
+            const eased =
+                progress < 0.5
+                    ? 4 * progress * progress * progress
+                    : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+            // Calculate current values
+            if (progress < 1) {
+                this._yaw = startYaw + (targetYaw - startYaw) * eased;
+                this._pitch = startPitch + (targetPitch - startPitch) * eased;
+                this._zoom = startZoom + (targetZoom - startZoom) * eased;
+
+                // Request next frame
+                requestAnimationFrame(animate);
+            } else {
+                // Ensure we end at exact target values
+                this._yaw = targetYaw;
+                this._pitch = targetPitch;
+                this._zoom = targetZoom;
+            }
+        };
+
+        requestAnimationFrame(animate);
+    }
+
+    initPlayer(src: string) {
+        window.addEventListener('resize', () => this.resize());
+        this.resize();
+
+        // Texture
+        const image = new Image();
+        image.src = src;
+        image.crossOrigin = '';
+        image.onload = () => {
+            const { gl } = this;
+
+            gl.bindTexture(gl.TEXTURE_2D, this.texture);
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                0,
+                gl.RGB,
+                gl.RGB,
+                gl.UNSIGNED_BYTE,
+                image
+            );
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); // wrap horizontally
+            gl.texParameteri(
+                gl.TEXTURE_2D,
+                gl.TEXTURE_WRAP_T,
+                gl.CLAMP_TO_EDGE
+            );
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+            const error = gl.getError();
+            if (error !== gl.NO_ERROR) {
+                console.error('WebGL texture upload error:', error);
+            }
+            requestAnimationFrame(() => this.render());
+        };
     }
 
     private resize() {

@@ -380,6 +380,8 @@ export default class Pano extends HTMLElement {
             // Start rendering once the first texture is loaded
             requestAnimationFrame(() => this.render());
 
+            this.dispatchEvent(new CustomEvent('textureLoaded'));
+
             // Then load higher resolutions in sequence if there are any
             if (sources.length > 1) {
                 this.loadHigherResolutions(sources.slice(1));
@@ -428,6 +430,9 @@ export default class Pano extends HTMLElement {
             if (error !== gl.NO_ERROR) {
                 console.error('WebGL texture upload error:', error);
             }
+
+            // Force a render when texture updates, even if idle
+            this.lastYaw = this.yaw - 0.001;
 
             // Execute callback after texture is loaded
             callback();

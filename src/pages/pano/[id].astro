@@ -26,6 +26,8 @@ const hiResSrc = (id: string) =>
 const { id } = Astro.params;
 
 const src = `${(await loResSrc(id)).default.src} ${(await hiResSrc(id)).default.src}`;
+const losrc = `${(await loResSrc(id)).default.src}`;
+// const src = losrc;
 ---
 
 <style is:inline>
@@ -47,17 +49,13 @@ const src = `${(await loResSrc(id)).default.src} ${(await hiResSrc(id)).default.
 <script src="../../components/pan-oh.web"></script>
 
 <pan-oh id="panorama" src={src} pitch="-89" zoom="0.8"></pan-oh>
-
 <script is:inline>
-    window.addEventListener('load', () => {
-        setTimeout(() => {
-            const pano = document.getElementById('panorama');
-
-            if (pano) {
-                setTimeout(() => {
-                    pano.animateTo(pano.yaw, 0, 2, 3000);
-                }, 50);
-            }
-        }, 1000);
+    document.addEventListener('DOMContentLoaded', () => {
+        const pano = document.getElementById('panorama');
+        pano.addEventListener('textureLoaded', () => {
+            setTimeout(() => {
+                pano.animateTo(pano.yaw, 0, 2, 3000);
+            }, 200);
+        });
     });
 </script>

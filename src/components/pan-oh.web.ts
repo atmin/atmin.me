@@ -372,72 +372,26 @@ export default class Pano extends HTMLElement {
         const sources = srcString.trim().split(/\s+/);
         if (sources.length === 0) return;
 
-        // Start loading the first (lowest) resolution
-        this.loadTextureFromUrl(sources[0], () => {
-            // Start rendering once the first texture is loaded
-            requestAnimationFrame(() => this.render());
-
-            this.dispatchEvent(new CustomEvent('textureLoaded'));
-
-            // Then load higher resolutions in sequence if there are any
-            if (sources.length > 1) {
-                this.loadHigherResolutions(sources.slice(1));
-            }
-        });
-    }
-
-    private loadHigherResolutions(sources: string[]) {
-        if (sources.length === 0) return;
-
-        // Load the next resolution in the background
-        this.loadTextureFromUrl(sources[0], () => {
-            // Continue with remaining sources
-            this.loadHigherResolutions(sources.slice(1));
-        });
-    }
-
-    private loadTextureFromUrl(url: string, callback: () => void) {
-        const image = new Image();
-        image.src = url;
-        image.crossOrigin = '';
-
-        image.onload = () => {
-            const { gl } = this;
-
-            // Use the existing texture object
-            gl.bindTexture(gl.TEXTURE_2D, this.texture);
-            gl.texImage2D(
-                gl.TEXTURE_2D,
-                0,
-                gl.RGB,
-                gl.RGB,
-                gl.UNSIGNED_BYTE,
-                image
-            );
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-            gl.texParameteri(
-                gl.TEXTURE_2D,
-                gl.TEXTURE_WRAP_T,
-                gl.CLAMP_TO_EDGE
-            );
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-            const error = gl.getError();
-            if (error !== gl.NO_ERROR) {
-                console.error('WebGL texture upload error:', error);
-            }
-
-            // Force a render when texture updates, even if idle
-            this.lastYaw = this.yaw - 0.001;
-
-            // Execute callback after texture is loaded
-            callback();
-        };
-
-        image.onerror = () => {
-            console.error(`Failed to load image: ${url}`);
-        };
+        loadImage(sources[0])
+            .then((image) => {
+                // First (lowest) resolution loaded
+                bindTexture(this.gl, this.texture, image);
+                this.renderLoop();
+                this.dispatchEvent(new CustomEvent('textureLoaded'));
+            })
+            .then(() => {
+                // Sequentially load the rest resolutions
+                sources.slice(1).reduce(
+                    (chain, src) =>
+                        chain.then(() =>
+                            loadImage(src).then((image) => {
+                                bindTexture(this.gl, this.texture, image);
+                                this.forceRender();
+                            })
+                        ),
+                    Promise.resolve()
+                );
+            });
     }
 
     private resize() {
@@ -491,7 +445,7 @@ export default class Pano extends HTMLElement {
             const speed = Math.sqrt(vx * vx + vy * vy);
 
             if (speed > 500) {
-                // Apply zoom-dependent sensitivity to inertia too
+                // Apply zoom-dependent sensitivity to inertia
                 this.yawVelocity = -vx * 0.002 * this.zoomFactor;
                 this.pitchVelocity = vy * 0.002 * this.zoomFactor;
             }
@@ -540,6 +494,14 @@ export default class Pano extends HTMLElement {
         this.yawVelocity += this.yawAccel;
         this.pitchVelocity += this.pitchAccel;
         this.zoomVelocity += this.zoomAccel;
+    }
+
+    private renderLoop() {
+        requestAnimationFrame(() => this.render());
+    }
+
+    private forceRender() {
+        this.lastYaw = this.yaw - 0.001;
     }
 
     private render() {
@@ -613,7 +575,7 @@ export default class Pano extends HTMLElement {
             gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
         }
 
-        requestAnimationFrame(() => this.render());
+        this.renderLoop();
     }
 }
 
@@ -648,4 +610,36 @@ function createProgram(gl: WebGLRenderingContext, vs: string, fs: string) {
     return program;
 }
 
+function bindTexture(
+    gl: WebGLRenderingContext,
+    texture: WebGLTexture,
+    image: HTMLImageElement
+) {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    const error = gl.getError();
+    if (error !== gl.NO_ERROR) {
+        console.error('WebGL texture upload error:', error);
+    }
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.src = url;
+        image.crossOrigin = '';
+        image.onload = () => resolve(image);
+        image.onerror = () => {
+            console.error(`Cannot load image ${url}`);
+            reject(url);
+        };
+    });
+}
+
+// Side effect
 customElements.define('pan-oh', Pano);

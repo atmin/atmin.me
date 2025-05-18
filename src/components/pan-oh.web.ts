@@ -159,6 +159,9 @@ export default class Pano extends HTMLElement {
     private lastZoom = 0;
     private lastAspectRatio = 0;
 
+    private isAnimating = false;
+    private afterAnimationCallback: (() => void) | null = null;
+
     // Mouse/touch
     private interactionHistory: { x: number; y: number; time: number }[] = [];
 
@@ -349,6 +352,7 @@ export default class Pano extends HTMLElement {
 
             // Calculate current values
             if (progress < 1) {
+                this.isAnimating = true;
                 this._yaw = startYaw + (targetYaw - startYaw) * eased;
                 this._pitch = startPitch + (targetPitch - startPitch) * eased;
                 this._zoom = startZoom + (targetZoom - startZoom) * eased;
@@ -356,6 +360,7 @@ export default class Pano extends HTMLElement {
                 // Request next frame
                 requestAnimationFrame(animate);
             } else {
+                this.isAnimating = false;
                 // Ensure we end at exact target values
                 this._yaw = targetYaw;
                 this._pitch = targetPitch;
@@ -372,26 +377,30 @@ export default class Pano extends HTMLElement {
         const sources = srcString.trim().split(/\s+/);
         if (sources.length === 0) return;
 
-        loadImage(sources[0])
-            .then((image) => {
-                // First (lowest) resolution loaded
-                bindTexture(this.gl, this.texture, image);
-                this.renderLoop();
-                this.dispatchEvent(new CustomEvent('textureLoaded'));
-            })
-            .then(() => {
-                // Sequentially load the rest resolutions
-                sources.slice(1).reduce(
-                    (chain, src) =>
-                        chain.then(() =>
-                            loadImage(src).then((image) => {
+        const onLowestResolutionLoaded = (image: HTMLImageElement) => {
+            bindTexture(this.gl, this.texture, image);
+            this.renderLoop();
+            this.dispatchEvent(new CustomEvent('textureLoaded'));
+        };
+
+        const sequantiallyLoadHigherResolitions = () => {
+            sources.slice(1).reduce(
+                (chain, src) =>
+                    chain.then(() =>
+                        loadImage(src).then((image) => {
+                            this.afterAnimationCallback = () => {
                                 bindTexture(this.gl, this.texture, image);
-                                this.forceRender();
-                            })
-                        ),
-                    Promise.resolve()
-                );
-            });
+                            };
+                            this.forceRender();
+                        })
+                    ),
+                Promise.resolve()
+            );
+        };
+
+        loadImage(sources[0])
+            .then(onLowestResolutionLoaded)
+            .then(sequantiallyLoadHigherResolitions);
     }
 
     private resize() {
@@ -505,6 +514,10 @@ export default class Pano extends HTMLElement {
     }
 
     private render() {
+        if (!this.isAnimating && this.afterAnimationCallback) {
+            this.afterAnimationCallback();
+            this.afterAnimationCallback = null;
+        }
         this.updateState();
 
         const {

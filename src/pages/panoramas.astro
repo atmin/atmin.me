@@ -145,6 +145,39 @@ const thumbnailSrc = (id: string) =>
                 expandThumbnail(thumbnail, destination);
             });
 
+        // Fix for back button navigation
+        window.addEventListener('pageshow', (event) => {
+            // Check if the page is being restored from cache (back button navigation)
+            if (event.persisted) {
+                // Reset any expanded thumbnails
+                const expandedThumbnails = document.querySelectorAll(
+                    '.pano-thumbnail-expanding'
+                );
+                expandedThumbnails.forEach((thumb) => {
+                    // Remove positioning styles
+                    thumb.style.position = '';
+                    thumb.style.top = '';
+                    thumb.style.left = '';
+                    thumb.style.width = '';
+                    thumb.style.height = '';
+                    thumb.style.margin = '';
+                    thumb.style.zIndex = '';
+                    thumb.style.transform = '';
+                    thumb.style.borderRadius = '';
+                    thumb.style.transition = '';
+
+                    // Remove the expanding class
+                    thumb.classList.remove('pano-thumbnail-expanding');
+                });
+
+                // Hide overlay if it's showing
+                overlay.classList.remove('active');
+
+                // Ensure body opacity is reset
+                document.body.style.opacity = '1';
+            }
+        });
+
         function expandThumbnail(thumbnail, destination) {
             // Get initial position and size
             const rect = thumbnail.getBoundingClientRect();

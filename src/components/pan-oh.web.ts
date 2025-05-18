@@ -301,22 +301,22 @@ export default class Pano extends HTMLElement {
     }
 
     connectedCallback() {
-        const src = this.getAttribute('src');
-        if (src) {
-            this.initPlayer(src);
-        }
+        this.initPlayer(this.getAttribute('src') ?? '');
     }
 
     attributeChangedCallback(name: string, oldValue: string, newValue: string) {
         if (oldValue === newValue) return;
 
-        if (name === 'src' && oldValue !== newValue) {
+        if (name === 'src') {
             this.initPlayer(newValue);
-        } else if (name === 'yaw') {
+        }
+        if (name === 'yaw') {
             this._yaw = parseFloat(newValue) || 0;
-        } else if (name === 'pitch') {
+        }
+        if (name === 'pitch') {
             this._pitch = parseFloat(newValue) || 0;
-        } else if (name === 'zoom') {
+        }
+        if (name === 'zoom') {
             this._zoom = parseFloat(newValue) || 2;
         }
     }
@@ -332,6 +332,7 @@ export default class Pano extends HTMLElement {
         const startZoom = this.zoom;
         const startTime = performance.now();
 
+        // TODO implement defer texture swapping *after* any running animation
         const animate = (currentTime: number) => {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
@@ -436,10 +437,12 @@ export default class Pano extends HTMLElement {
     }
 
     private resize() {
-        this.canvas.width = this.canvas.clientWidth;
-        this.canvas.height = this.canvas.clientHeight;
-        this.aspectRatio = this.canvas.height / this.canvas.width;
-        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+        const { canvas, gl } = this;
+
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        this.aspectRatio = canvas.height / canvas.width;
+        gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
     private createShader(type: number, source: string) {

@@ -73,11 +73,11 @@ const fragmentShaderSource = glsl`
     }
 `;
 
-const DAMPING = 0.98; // Controls inertia decay
-const ZOOM_DAMPING = 0.5;
-const EPSILON = 0.001;
+const DAMPING = 0.985; // Controls inertia decay
+const ZOOM_DAMPING = 0.6;
 
 export default class Pano extends HTMLElement {
+    // System
     private canvas: HTMLCanvasElement;
     private gl: WebGLRenderingContext;
     private program: WebGLProgram;
@@ -93,15 +93,56 @@ export default class Pano extends HTMLElement {
     private uZoom: WebGLUniformLocation;
     private uAspectRatio: WebGLUniformLocation;
 
-    // Camera controls
+    // Player state
     private aspectRatio;
-    private _yaw = 0;
-    private _pitch = 0;
-    private _zoom = 2;
 
-    private yawVelocity = 0;
-    private pitchVelocity = 0;
+    private _yaw = 0;
+    get yaw(): number {
+        return this._yaw;
+    }
+    set yaw(value) {
+        this._yaw = value;
+        this.setAttribute('yaw', value.toString());
+    }
+
+    private _pitch = 0;
+    get pitch(): number {
+        return this._pitch;
+    }
+    set pitch(value) {
+        const clamped = Math.max(-89, Math.min(89, value));
+        this._pitch = clamped;
+        this.setAttribute('pitch', clamped.toString());
+    }
+
+    private _zoom = 2;
+    get zoom(): number {
+        return this._zoom;
+    }
+    set zoom(value) {
+        const clamped = Math.max(0.6, Math.min(10, value));
+        this._zoom = clamped;
+        this.setAttribute('zoom', clamped.toString());
+    }
+
+    private _yawVelocity = 0;
+    get yawVelocity(): number {
+        return this._yawVelocity;
+    }
+    set yawVelocity(value) {
+        this._yawVelocity = Math.abs(value) < 0.001 ? 0 : value;
+    }
+
+    private _pitchVelocity = 0;
+    get pitchVelocity(): number {
+        return this._pitchVelocity;
+    }
+    set pitchVelocity(value) {
+        this._pitchVelocity = Math.abs(value) < 0.001 ? 0 : value;
+    }
+
     private zoomVelocity = 0;
+
     private yawAccel = 0;
     private pitchAccel = 0;
     private zoomAccel = 0;
@@ -272,32 +313,6 @@ export default class Pano extends HTMLElement {
         });
 
         window.addEventListener('resize', () => this.resize());
-    }
-
-    get yaw(): number {
-        return this._yaw;
-    }
-    set yaw(value) {
-        this._yaw = value;
-        this.setAttribute('yaw', value.toString());
-    }
-
-    get pitch(): number {
-        return this._pitch;
-    }
-    set pitch(value) {
-        const clamped = Math.max(-89, Math.min(89, value));
-        this._pitch = clamped;
-        this.setAttribute('pitch', clamped.toString());
-    }
-
-    get zoom(): number {
-        return this._zoom;
-    }
-    set zoom(value) {
-        const clamped = Math.max(0.6, Math.min(10, value));
-        this._zoom = clamped;
-        this.setAttribute('zoom', clamped.toString());
     }
 
     connectedCallback() {
@@ -532,28 +547,17 @@ export default class Pano extends HTMLElement {
         this.interactionHistory = [];
     }
 
-    private render() {
+    private updateState() {
         this.yaw += this.yawVelocity;
-        this.pitch += this.pitchVelocity;
-
-        this.pitch = Math.max(-89, Math.min(89, this.pitch));
-
-        // Apply damping
         this.yawVelocity *= DAMPING;
-        this.pitchVelocity *= DAMPING;
 
-        if (Math.abs(this.yawVelocity) < EPSILON) {
-            this.yawVelocity = 0;
-        }
-        if (Math.abs(this.pitchVelocity) < EPSILON) {
-            this.pitchVelocity = 0;
-        }
+        this.pitch += this.pitchVelocity;
+        this.pitchVelocity *= DAMPING;
 
         this.zoom += this.zoomVelocity;
         this.zoomVelocity *= ZOOM_DAMPING;
-        if (Math.abs(this.zoomVelocity) < 0.05) {
-            this.zoomVelocity = 0;
-        }
+        this.zoomVelocity =
+            Math.abs(this.zoomVelocity) < 0.05 ? 0 : this.zoomVelocity;
 
         // Get zoom-adjusted sensitivity for keyboard controls
         const zoomFactor = this.getZoomFactor();
@@ -587,72 +591,85 @@ export default class Pano extends HTMLElement {
         this.yawVelocity += this.yawAccel;
         this.pitchVelocity += this.pitchAccel;
         this.zoomVelocity += this.zoomAccel;
+    }
 
-        if (
-            this.yaw !== this.lastYaw ||
-            this.pitch !== this.lastPitch ||
-            this.zoom !== this.lastZoom ||
-            this.aspectRatio !== this.lastAspectRatio
-        ) {
-            this.lastYaw = this.yaw;
-            this.lastPitch = this.pitch;
-            this.lastZoom = this.zoom;
-            this.lastAspectRatio = this.aspectRatio;
+    private render() {
+        this.updateState();
 
-            this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-            this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
-            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+        const {
+            gl,
+            program,
+            posBuf,
+            positionLoc,
+            uvBuf,
+            uvLoc,
+            idxBuf,
+            canvas: { width, height },
 
-            this.gl.useProgram(this.program);
+            texture,
+            yaw,
+            pitch,
+            zoom,
+            aspectRatio,
 
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.posBuf);
-            this.gl.enableVertexAttribArray(this.positionLoc);
-            this.gl.vertexAttribPointer(
-                this.positionLoc,
-                2,
-                this.gl.FLOAT,
-                false,
-                0,
-                0
-            );
+            uTexture,
+            uYaw,
+            uPitch,
+            uZoom,
+            uAspectRatio,
 
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuf);
-            this.gl.enableVertexAttribArray(this.uvLoc);
-            this.gl.vertexAttribPointer(
-                this.uvLoc,
-                2,
-                this.gl.FLOAT,
-                false,
-                0,
-                0
-            );
+            lastYaw,
+            lastPitch,
+            lastZoom,
+            lastAspectRatio,
+        } = this;
 
-            this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.idxBuf);
+        const isRenderNeeded =
+            yaw !== lastYaw ||
+            pitch !== lastPitch ||
+            zoom !== lastZoom ||
+            aspectRatio !== lastAspectRatio;
 
-            this.gl.uniform1f(this.uYaw, this.degToRad(this.yaw));
-            this.gl.uniform1f(this.uPitch, this.degToRad(this.pitch));
-            this.gl.uniform1f(this.uZoom, this.zoom);
-            this.gl.uniform1f(this.uAspectRatio, this.aspectRatio);
+        if (isRenderNeeded) {
+            this.lastYaw = yaw;
+            this.lastPitch = pitch;
+            this.lastZoom = zoom;
+            this.lastAspectRatio = aspectRatio;
 
-            this.gl.activeTexture(this.gl.TEXTURE0);
-            this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
-            this.gl.uniform1i(this.uTexture, 0);
+            gl.viewport(0, 0, width, height);
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
 
-            this.gl.drawElements(
-                this.gl.TRIANGLES,
-                6,
-                this.gl.UNSIGNED_SHORT,
-                0
-            );
+            gl.useProgram(program);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+            gl.enableVertexAttribArray(positionLoc);
+            gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf);
+            gl.enableVertexAttribArray(uvLoc);
+            gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+
+            gl.uniform1f(uYaw, degToRad(yaw));
+            gl.uniform1f(uPitch, degToRad(pitch));
+            gl.uniform1f(uZoom, zoom);
+            gl.uniform1f(uAspectRatio, aspectRatio);
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.uniform1i(uTexture, 0);
+
+            gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
         }
 
         requestAnimationFrame(() => this.render());
     }
+}
 
-    // Math utilities
-    private degToRad(d: number) {
-        return (d * Math.PI) / 180;
-    }
+function degToRad(d: number) {
+    return (d * Math.PI) / 180;
 }
 
 customElements.define('pan-oh', Pano);

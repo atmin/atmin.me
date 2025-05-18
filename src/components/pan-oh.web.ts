@@ -73,7 +73,7 @@ const fragmentShaderSource = glsl`
     }
 `;
 
-const DAMPING = 0.985; // Controls inertia decay
+const DAMPING = 0.985;
 const ZOOM_DAMPING = 0.6;
 
 export default class Pano extends HTMLElement {
@@ -208,7 +208,7 @@ export default class Pano extends HTMLElement {
         );
         this.gl.useProgram(this.program);
 
-        const { gl, program } = this;
+        const { gl, program, canvas } = this;
 
         this.texture = gl.createTexture();
 
@@ -238,22 +238,22 @@ export default class Pano extends HTMLElement {
         this.uvLoc = gl.getAttribLocation(program, 'uv');
 
         // MOUSE
-        this.canvas.addEventListener('mousedown', (e) => {
-            this.canvas.focus();
+        canvas.addEventListener('mousedown', (e) => {
+            canvas.focus();
             this.startInteraction(e.clientX, e.clientY);
         });
 
-        this.canvas.addEventListener('mousemove', (e) => {
+        canvas.addEventListener('mousemove', (e) => {
             if (!this.isDragging) {
                 return;
             }
             this.moveInteraction(e.clientX, e.clientY);
         });
 
-        this.canvas.addEventListener('mouseup', () => this.endInteraction());
-        this.canvas.addEventListener('mouseleave', () => this.endInteraction());
+        canvas.addEventListener('mouseup', () => this.endInteraction());
+        canvas.addEventListener('mouseleave', () => this.endInteraction());
 
-        this.canvas.addEventListener('wheel', (e) => {
+        canvas.addEventListener('wheel', (e) => {
             this.zoomVelocity -= e.deltaY * 0.0005;
             e.preventDefault();
         });
@@ -261,7 +261,7 @@ export default class Pano extends HTMLElement {
         // TOUCH
         let lastTouchDist = 0;
 
-        this.canvas.addEventListener('touchstart', (e) => {
+        canvas.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) {
                 const { clientX, clientY } = e.touches[0];
                 this.startInteraction(clientX, clientY);
@@ -272,7 +272,7 @@ export default class Pano extends HTMLElement {
             }
         });
 
-        this.canvas.addEventListener('touchmove', (e) => {
+        canvas.addEventListener('touchmove', (e) => {
             if (e.touches.length === 1 && this.isDragging) {
                 const { clientX, clientY } = e.touches[0];
                 this.moveInteraction(clientX, clientY);
@@ -289,7 +289,7 @@ export default class Pano extends HTMLElement {
             e.preventDefault();
         });
 
-        this.canvas.addEventListener('touchend', () => {
+        canvas.addEventListener('touchend', () => {
             this.endInteraction();
         });
 

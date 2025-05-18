@@ -119,6 +119,9 @@ export default class Pano extends HTMLElement {
     get zoom(): number {
         return this._zoom;
     }
+    get zoomFactor(): number {
+        return 1.0 / this.zoom;
+    }
     set zoom(value) {
         const clamped = Math.max(0.6, Math.min(10, value));
         this._zoom = clamped;
@@ -198,49 +201,41 @@ export default class Pano extends HTMLElement {
         this.shadowRoot?.append(style, this.canvas);
 
         // GL
-        this.program = this.createProgram(
+        this.program = createProgram(
+            this.gl,
             vertexShaderSource,
             fragmentShaderSource
         );
         this.gl.useProgram(this.program);
 
-        this.texture = this.gl.createTexture();
+        const { gl, program } = this;
 
-        this.uTexture = this.gl.getUniformLocation(this.program, 'uTexture')!;
-        this.uYaw = this.gl.getUniformLocation(this.program, 'uYaw')!;
-        this.uPitch = this.gl.getUniformLocation(this.program, 'uPitch')!;
-        this.uZoom = this.gl.getUniformLocation(this.program, 'uZoom')!;
-        this.uAspectRatio = this.gl.getUniformLocation(
-            this.program,
-            'uAspectRatio'
-        )!;
+        this.texture = gl.createTexture();
+
+        this.uTexture = gl.getUniformLocation(program, 'uTexture')!;
+        this.uYaw = gl.getUniformLocation(program, 'uYaw')!;
+        this.uPitch = gl.getUniformLocation(program, 'uPitch')!;
+        this.uZoom = gl.getUniformLocation(program, 'uZoom')!;
+        this.uAspectRatio = gl.getUniformLocation(program, 'uAspectRatio')!;
 
         const quadPositions = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
         const quadUVs = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
         const indices = new Uint16Array([0, 1, 2, 2, 1, 3]);
 
-        this.posBuf = this.gl.createBuffer();
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.posBuf);
-        this.gl.bufferData(
-            this.gl.ARRAY_BUFFER,
-            quadPositions,
-            this.gl.STATIC_DRAW
-        );
+        this.posBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, quadPositions, gl.STATIC_DRAW);
 
-        this.uvBuf = this.gl.createBuffer();
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuf);
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, quadUVs, this.gl.STATIC_DRAW);
+        this.uvBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, quadUVs, gl.STATIC_DRAW);
 
-        this.idxBuf = this.gl.createBuffer();
-        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.idxBuf);
-        this.gl.bufferData(
-            this.gl.ELEMENT_ARRAY_BUFFER,
-            indices,
-            this.gl.STATIC_DRAW
-        );
+        this.idxBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.idxBuf);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 
-        this.positionLoc = this.gl.getAttribLocation(this.program, 'position');
-        this.uvLoc = this.gl.getAttribLocation(this.program, 'uv');
+        this.positionLoc = gl.getAttribLocation(program, 'position');
+        this.uvLoc = gl.getAttribLocation(program, 'uv');
 
         // MOUSE
         this.canvas.addEventListener('mousedown', (e) => {
@@ -297,12 +292,6 @@ export default class Pano extends HTMLElement {
         this.canvas.addEventListener('touchend', () => {
             this.endInteraction();
         });
-
-        function getTouchDist(e: TouchEvent) {
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            return Math.sqrt(dx * dx + dy * dy);
-        }
 
         // KEYBOARD
         window.addEventListener('keydown', (e) => {
@@ -460,33 +449,6 @@ export default class Pano extends HTMLElement {
         gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
-    private createShader(type: number, source: string) {
-        const shader = this.gl.createShader(type)!;
-        this.gl.shaderSource(shader, source);
-        this.gl.compileShader(shader);
-        if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
-            console.error(this.gl.getShaderInfoLog(shader));
-        }
-        return shader;
-    }
-
-    private createProgram(vs: string, fs: string) {
-        const program = this.gl.createProgram();
-        this.gl.attachShader(
-            program,
-            this.createShader(this.gl.VERTEX_SHADER, vs)
-        );
-        this.gl.attachShader(
-            program,
-            this.createShader(this.gl.FRAGMENT_SHADER, fs)
-        );
-        this.gl.linkProgram(program);
-        if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
-            console.error(this.gl.getProgramInfoLog(program));
-        }
-        return program;
-    }
-
     private startInteraction(x: number, y: number) {
         this.isDragging = true;
         this.lastX = x;
@@ -496,23 +458,14 @@ export default class Pano extends HTMLElement {
         this.interactionHistory = [{ x, y, time: performance.now() }];
     }
 
-    private getZoomFactor(): number {
-        // At zoom=1, factor=1. At higher zoom levels, the factor decreases
-        return 1.0 / this.zoom;
-    }
-
     private moveInteraction(x: number, y: number) {
+        const baseSensitivity = 0.3;
         const dx = x - this.lastX;
         const dy = y - this.lastY;
 
-        // Apply zoom-dependent sensitivity
-        const zoomFactor = this.getZoomFactor();
-        const baseSensitivity = 0.3;
+        this.yaw -= dx * baseSensitivity * this.zoomFactor;
+        this.pitch += dy * baseSensitivity * this.zoomFactor;
 
-        this.yaw -= dx * baseSensitivity * zoomFactor;
-        this.pitch += dy * baseSensitivity * zoomFactor;
-
-        this.pitch = Math.max(-89, Math.min(89, this.pitch));
         this.lastX = x;
         this.lastY = y;
 
@@ -539,9 +492,8 @@ export default class Pano extends HTMLElement {
 
             if (speed > 500) {
                 // Apply zoom-dependent sensitivity to inertia too
-                const zoomFactor = this.getZoomFactor();
-                this.yawVelocity = -vx * 0.002 * zoomFactor;
-                this.pitchVelocity = vy * 0.002 * zoomFactor;
+                this.yawVelocity = -vx * 0.002 * this.zoomFactor;
+                this.pitchVelocity = vy * 0.002 * this.zoomFactor;
             }
         }
         this.interactionHistory = [];
@@ -559,10 +511,8 @@ export default class Pano extends HTMLElement {
         this.zoomVelocity =
             Math.abs(this.zoomVelocity) < 0.05 ? 0 : this.zoomVelocity;
 
-        // Get zoom-adjusted sensitivity for keyboard controls
-        const zoomFactor = this.getZoomFactor();
         const baseKeyStep = 0.1;
-        const keyStep = baseKeyStep * zoomFactor;
+        const keyStep = baseKeyStep * this.zoomFactor;
         const zoomStep = 0.01;
 
         if (this.keys['arrowleft'] || this.keys['a']) {
@@ -587,7 +537,6 @@ export default class Pano extends HTMLElement {
             this.zoomAccel = 0;
         }
 
-        // Apply acceleration to velocity
         this.yawVelocity += this.yawAccel;
         this.pitchVelocity += this.pitchAccel;
         this.zoomVelocity += this.zoomAccel;
@@ -670,6 +619,33 @@ export default class Pano extends HTMLElement {
 
 function degToRad(d: number) {
     return (d * Math.PI) / 180;
+}
+
+function getTouchDist(e: TouchEvent) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function createShader(gl: WebGLRenderingContext, type: number, source: string) {
+    const shader = gl.createShader(type)!;
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error(gl.getShaderInfoLog(shader));
+    }
+    return shader;
+}
+
+function createProgram(gl: WebGLRenderingContext, vs: string, fs: string) {
+    const program = gl.createProgram();
+    gl.attachShader(program, createShader(gl, gl.VERTEX_SHADER, vs));
+    gl.attachShader(program, createShader(gl, gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error(gl.getProgramInfoLog(program));
+    }
+    return program;
 }
 
 customElements.define('pan-oh', Pano);

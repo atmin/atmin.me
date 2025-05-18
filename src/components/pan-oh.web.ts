@@ -76,8 +76,6 @@ const fragmentShaderSource = glsl`
 const DAMPING = 0.98; // Controls inertia decay
 const ZOOM_DAMPING = 0.5;
 const EPSILON = 0.001;
-const MIN_ZOOM = 0.8;
-const MAX_ZOOM = 10;
 
 export default class Pano extends HTMLElement {
     private canvas: HTMLCanvasElement;
@@ -297,7 +295,7 @@ export default class Pano extends HTMLElement {
         return this._zoom;
     }
     set zoom(value) {
-        const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
+        const clamped = Math.max(0.6, Math.min(10, value));
         this._zoom = clamped;
         this.setAttribute('zoom', clamped.toString());
     }
@@ -317,15 +315,9 @@ export default class Pano extends HTMLElement {
         } else if (name === 'yaw') {
             this._yaw = parseFloat(newValue) || 0;
         } else if (name === 'pitch') {
-            this._pitch = Math.max(
-                -89,
-                Math.min(89, parseFloat(newValue) || 0)
-            );
+            this._pitch = parseFloat(newValue) || 0;
         } else if (name === 'zoom') {
-            this._zoom = Math.max(
-                MIN_ZOOM,
-                Math.min(MAX_ZOOM, parseFloat(newValue) || 2)
-            );
+            this._zoom = parseFloat(newValue) || 2;
         }
     }
 
@@ -559,7 +551,6 @@ export default class Pano extends HTMLElement {
         if (Math.abs(this.zoomVelocity) < 0.05) {
             this.zoomVelocity = 0;
         }
-        this.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.zoom));
 
         // Get zoom-adjusted sensitivity for keyboard controls
         const zoomFactor = this.getZoomFactor();

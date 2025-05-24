@@ -68,7 +68,14 @@ const fragmentShaderSource = glsl`
             0.5 - longitude / (2.0 * PI),
             0.5 - latitude / PI
         );
+        texUv = clamp(texUv, 0.0, 1.0);
 
+        // Debug: Output texture coordinates as colors
+        //gl_FragColor = vec4(texUv, 0.0, 1.0);
+
+        // Debug: Sample the texture at the current UV coordinates
+        // gl_FragColor = texture2D(uTexture, vUv);
+    
         gl_FragColor = texture2D(uTexture, texUv);
     }
 `;
@@ -307,10 +314,6 @@ export default class Pano extends HTMLElement {
         window.addEventListener('resize', () => this.resize());
     }
 
-    connectedCallback() {
-        this.initPlayer(this.getAttribute('src') ?? '');
-    }
-
     attributeChangedCallback(name: string, oldValue: string, newValue: string) {
         if (oldValue === newValue) return;
 
@@ -375,15 +378,24 @@ export default class Pano extends HTMLElement {
         this.resize();
 
         const sources = srcString.trim().split(/\s+/);
+        console.log('[pan-oh] src=', sources);
         if (sources.length === 0) return;
+
+        const { gl } = this;
+        console.log(
+            '[pan-oh] WebGL max texture size:',
+            gl.getParameter(gl.MAX_TEXTURE_SIZE)
+        );
+        console.log('[pan-oh] WebGL renderer:', gl.getParameter(gl.RENDERER));
 
         const onLowestResolutionLoaded = (image: HTMLImageElement) => {
             bindTexture(this.gl, this.texture, image);
             this.renderLoop();
+            console.log('[pan-oh] dispatch textureLoaded');
             this.dispatchEvent(new CustomEvent('textureLoaded'));
         };
 
-        const sequantiallyLoadHigherResolitions = () => {
+        const sequantiallyLoadHigherResolutions = () => {
             sources.slice(1).reduce(
                 (chain, src) =>
                     chain.then(() =>
@@ -400,7 +412,7 @@ export default class Pano extends HTMLElement {
 
         loadImage(sources[0])
             .then(onLowestResolutionLoaded)
-            .then(sequantiallyLoadHigherResolitions);
+            .then(sequantiallyLoadHigherResolutions);
     }
 
     private resize() {
@@ -561,7 +573,7 @@ export default class Pano extends HTMLElement {
             this.lastAspectRatio = aspectRatio;
 
             gl.viewport(0, 0, width, height);
-            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            gl.clearColor(0.0, 0.5, 0.0, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             gl.useProgram(program);
@@ -628,8 +640,24 @@ function bindTexture(
     texture: WebGLTexture,
     image: HTMLImageElement
 ) {
+    const isPowerOf2 = (value: number) => (value & (value - 1)) === 0;
+
+    const textureSource: HTMLImageElement | HTMLCanvasElement =
+        isPowerOf2(image.width) && isPowerOf2(image.height)
+            ? image
+            : resizeToPowerOf2(image);
+
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);
+    gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        textureSource
+    );
+
+    // Now we can always use these settings
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -637,8 +665,30 @@ function bindTexture(
 
     const error = gl.getError();
     if (error !== gl.NO_ERROR) {
-        console.error('WebGL texture upload error:', error);
+        console.error('[pan-oh] WebGL texture upload error:', error);
+    } else {
+        console.log('[pan-oh] Texture uploaded successfully');
     }
+}
+
+function resizeToPowerOf2(image: HTMLImageElement): HTMLCanvasElement {
+    // Find the next power of 2 dimensions
+    const width = nextPowerOf2(image.width);
+    const height = nextPowerOf2(image.height);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+
+    // Draw the image preserving aspect ratio and quality
+    ctx.drawImage(image, 0, 0, width, height);
+
+    return canvas;
+}
+
+function nextPowerOf2(n: number): number {
+    return Math.pow(2, Math.ceil(Math.log2(n)));
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -646,9 +696,12 @@ function loadImage(url: string): Promise<HTMLImageElement> {
         const image = new Image();
         image.src = url;
         image.crossOrigin = '';
-        image.onload = () => resolve(image);
+        image.onload = () => {
+            console.log('[pan-oh] loaded', image.width, '×', image.height, url);
+            resolve(image);
+        };
         image.onerror = () => {
-            console.error(`Cannot load image ${url}`);
+            console.error(`[pan-oh] cannot load ${url}`);
             reject(url);
         };
     });

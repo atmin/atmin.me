@@ -26,8 +26,6 @@ const hiResSrc = (id: string) =>
 const { id } = Astro.params;
 
 const src = `${(await loResSrc(id)).default.src} ${(await hiResSrc(id)).default.src}`;
-const losrc = `${(await loResSrc(id)).default.src}`;
-// const src = losrc;
 ---
 
 <style is:inline>

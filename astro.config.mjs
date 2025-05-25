@@ -7,6 +7,9 @@ export default defineConfig({
         server: {
             allowedHosts: ['.ngrok-free.app'],
         },
+        optimizeDeps: {
+            exclude: ['@ffmpeg/ffmpeg'],
+        },
     },
     site: 'https://atmin.me',
 });

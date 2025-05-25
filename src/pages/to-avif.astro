@@ -1,0 +1,101 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout>
+    <main>
+        <h1>Convert JPG to 16384×8192 AVIF (client-side via FFmpeg.wasm)</h1>
+        <input type="file" id="file-input" accept="image/*" />
+        <div id="status"></div>
+        <div id="message"></div>
+        <div id="output"></div>
+    </main>
+</Layout>
+
+<script>
+    import { FFmpeg } from '@ffmpeg/ffmpeg';
+    import { fetchFile, toBlobURL } from '@ffmpeg/util';
+
+    let ffmpeg: FFmpeg | null = null;
+    const fileInput = document.getElementById('file-input')!;
+    const output = document.getElementById('output')!;
+    const message = document.getElementById('message')!;
+    const status = document.getElementById('status')!;
+
+    fileInput.addEventListener('change', async (e: any) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const fileName = 'input.jpg'; // Will work for PNG too
+        const outputName = 'output.avif';
+
+        try {
+            status.textContent = '⏳ Initializing FFmpeg...';
+            if (!ffmpeg) {
+                ffmpeg = new FFmpeg();
+                ffmpeg.on('log', ({ message }) => {
+                    console.log(message);
+                });
+                ffmpeg.on('progress', ({ progress, time }) => {
+                    message.innerHTML = `${progress * 100} %, time: ${time / 1000000} s`;
+                });
+                await ffmpeg.load();
+            }
+
+            status.textContent = '⏳ Reading input file...';
+            const fileData = await fetchFile(file);
+            ffmpeg.writeFile(fileName, fileData);
+
+            status.textContent = '⏳ Encoding AVIF with FFmpeg...';
+            await ffmpeg.exec([
+                '-i',
+                fileName,
+                '-vf',
+                'scale=16384:8192:flags=lanczos',
+                '-c:v',
+                'libaom-av1',
+                '-crf',
+                '30',
+                '-b:v',
+                '0',
+                outputName,
+            ]);
+
+            status.textContent = '⏳ Fetching result...';
+            const data = await ffmpeg.readFile(outputName);
+            const blob = new Blob([data], { type: 'image/avif' });
+            const url = URL.createObjectURL(blob);
+
+            status.textContent = '✅ Done!';
+            output.innerHTML = '';
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = outputName;
+            link.textContent = 'Download AVIF';
+            link.style.display = 'block';
+            link.style.margin = '1rem 0';
+
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = 'AVIF Preview';
+            img.style.maxWidth = '100%';
+
+            output.appendChild(link);
+            output.appendChild(img);
+        } catch (err: any) {
+            console.error(err);
+            status.textContent = '❌ Failed: ' + err.message;
+        }
+    });
+</script>
+
+<style>
+    #file-input {
+        margin-bottom: 1rem;
+    }
+    #status {
+        font-family: monospace;
+        margin-bottom: 1rem;
+    }
+</style>

@@ -124,6 +124,11 @@ const thumbnailSrc = (id: string) =>
 </style>
 
 <script is:inline>
+    // TODO:
+    // 1. load invisible player in the background while showing circular progress over thumbnail
+    // 2. replace thumbnail with now visible player
+    // 3. animate both: player dimensions to full screen, and land down animation
+    // 4. on transition end, replace page URL, so back button works. Maybe think of the reverse animation
     document.addEventListener('DOMContentLoaded', () => {
         // Create overlay element
         const overlay = document.createElement('div');

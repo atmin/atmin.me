@@ -5,6 +5,7 @@ import { getCollection } from 'astro:content';
 import Layout from '../layouts/Layout.astro';
 
 const panoramas = await getCollection('pano');
+panoramas.sort((a, b) => b.id.localeCompare(a.id));
 const thumbnails = import.meta.glob<{ default: ImageMetadata }>(
     '/src/data/pano/**/thumbnail.jpg'
 );

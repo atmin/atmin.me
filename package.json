@@ -2,7 +2,6 @@
   "name": "astro",
   "type": "module",
   "version": "0.0.1",
-  "packageManager": "pnpm@10.10.0",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
@@ -12,6 +11,7 @@
   "dependencies": {
     "@babylonjs/core": "^8.7.0",
     "astro": "^5.7.10",
+    "libavif-wasm": "^0.1.13",
     "sharp": "^0.34.1"
   }
 }

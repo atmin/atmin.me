@@ -14,6 +14,14 @@ Options:
 EOF
 }
 
+# Handle Ctrl-C (SIGINT) and SIGTERM
+cleanup() {
+  echo -e "\nAborted by user. Exiting..."
+  exit 130
+}
+
+trap cleanup SIGINT SIGTERM
+
 # Defaults
 compression_level=0
 

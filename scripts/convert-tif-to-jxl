@@ -1,0 +1,26 @@
+#!/bin/bash
+
+shopt -s nullglob
+
+# Find all .tif and .tiff files
+files=( *.tif *.tiff )
+
+# Function to convert a single file
+convert_file() {
+  input="$1"
+  output="${input%.*}.jxl"
+
+  # Skip if output already exists
+  if [[ -f "$output" ]]; then
+    echo "Skipping $input (already converted)"
+    return
+  fi
+
+  echo "Converting $input → $output"
+  ffmpeg -y -i "$input" -c:v libjxl -distance 0 "$output"
+}
+
+export -f convert_file
+
+# Run in parallel (adjust -j for number of cores)
+printf "%s\n" "${files[@]}" | parallel -j "$(nproc)" convert_file

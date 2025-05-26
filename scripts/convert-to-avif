@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# Usage function
+usage() {
+  echo "Usage: $0 <input_image> [--desaturate]"
+  exit 1
+}
+
+# Input validation
+if [ -z "$1" ]; then
+  usage
+fi
+
+input="$1"
+shift
+
+# Flag for optional desaturation
+desaturate=false
+while [[ "$1" ]]; do
+  case "$1" in
+    --desaturate)
+      desaturate=true
+      ;;
+    *)
+      usage
+      ;;
+  esac
+  shift
+done
+
+# Parallel arrays for resolution and output filenames
+resolutions=("16384x8192" "8192x4096" "4096x2048" "2048x1024")
+filenames=("16k.avif" "8k.avif" "4k.avif" "2k.avif")
+crfs=("24" "30" "36" "42")
+
+# Convert loop
+for i in "${!resolutions[@]}"; do
+  res="${resolutions[$i]}"
+  output="${filenames[$i]}"
+  crf="${crfs[$i]}"
+  width="${res%x*}"
+  height="${res#*x}"
+
+  if $desaturate; then
+    vf_arg="-vf colorchannelmixer=rr=0.75:gg=0.75:bb=0.75,scale=${width}:${height}:flags=lanczos"
+  else
+    vf_arg="-vf scale=${width}:${height}:flags=lanczos"
+  fi
+
+  # https://trac.ffmpeg.org/wiki/Encode/AV1
+  ffmpeg -y -i "$input" \
+    $vf_arg \
+    -c:v libaom-av1 -crf $crf -b:v 0 -still-picture \
+    "$output"
+done

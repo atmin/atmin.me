@@ -32,6 +32,8 @@ import Layout from '../layouts/Layout.astro';
         try {
             status.textContent = '⏳ Initializing FFmpeg...';
             if (!ffmpeg) {
+                const baseURL =
+                    'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
                 ffmpeg = new FFmpeg();
                 ffmpeg.on('log', ({ message }) => {
                     console.log(message);
@@ -39,7 +41,16 @@ import Layout from '../layouts/Layout.astro';
                 ffmpeg.on('progress', ({ progress, time }) => {
                     message.innerHTML = `${progress * 100} %, time: ${time / 1000000} s`;
                 });
-                await ffmpeg.load();
+                await ffmpeg.load({
+                    coreURL: await toBlobURL(
+                        `${baseURL}/ffmpeg-core.js`,
+                        'text/javascript'
+                    ),
+                    wasmURL: await toBlobURL(
+                        `${baseURL}/ffmpeg-core.wasm`,
+                        'application/wasm'
+                    ),
+                });
             }
 
             status.textContent = '⏳ Reading input file...';

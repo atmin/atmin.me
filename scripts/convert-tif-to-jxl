@@ -1,26 +1,68 @@
 #!/bin/bash
 
-shopt -s nullglob
+show_help() {
+  cat <<EOF
+Usage: $(basename "$0") [--compression-level N]
 
-# Find all .tif and .tiff files
-files=( *.tif *.tiff )
+Converts all .tif and .tiff files in the current directory to lossless JPEG XL (.jxl).
+Skips files that have already been converted.
 
-# Function to convert a single file
-convert_file() {
-  input="$1"
-  output="${input%.*}.jxl"
-
-  # Skip if output already exists
-  if [[ -f "$output" ]]; then
-    echo "Skipping $input (already converted)"
-    return
-  fi
-
-  echo "Converting $input → $output"
-  ffmpeg -y -i "$input" -c:v libjxl -distance 0 "$output"
+Options:
+  --compression-level N   Compression level for libjxl (default: 0 for lossless)
+                          Values > 0 enable lossy compression.
+  --help                  Show this help message and exit.
+EOF
 }
 
-export -f convert_file
+# Defaults
+compression_level=0
 
-# Run in parallel (adjust -j for number of cores)
-printf "%s\n" "${files[@]}" | parallel -j "$(nproc)" convert_file
+# Parse arguments
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --compression-level)
+      shift
+      if [[ "$1" =~ ^[0-9]+$ ]]; then
+        compression_level="$1"
+      else
+        echo "Error: --compression-level requires a numeric argument." >&2
+        exit 1
+      fi
+      ;;
+    --help)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      show_help
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+# Find TIFF files
+shopt -s nullglob
+files=( *.tif *.tiff )
+total=${#files[@]}
+
+if [[ "$total" -eq 0 ]]; then
+  echo "No .tif or .tiff files found in the current directory."
+  exit 0
+fi
+
+# Process files serially
+count=0
+for input in "${files[@]}"; do
+  ((count++))
+  output="${input%.*}.jxl"
+
+  if [[ -f "$output" ]]; then
+    echo "[$count/$total] Skipping $input (already converted)"
+    continue
+  fi
+
+  echo "[$count/$total] Converting $input → $output"
+  ffmpeg -y -i "$input" -c:v libjxl -distance "$compression_level" "$output"
+done

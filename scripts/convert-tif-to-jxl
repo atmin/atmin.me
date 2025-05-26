@@ -76,7 +76,7 @@ for input in "${files[@]}"; do
 
   # Copy EXIF metadata (if tool is available)
   if command -v exiftool >/dev/null; then
-    exiftool -TagsFromFile "$input" "-all:all>all:all" "$output" -overwrite_original
+    exiftool -j "$input" > "${output}.json"
   else
     echo "Warning: exiftool not found; metadata not preserved for $output"
   fi

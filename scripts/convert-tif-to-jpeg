@@ -1,0 +1,82 @@
+#!/bin/bash
+
+show_help() {
+  cat <<EOF
+Usage: $(basename "$0") [--quality N]
+
+Converts all .tif and .tiff files in the current directory to JPEG (.jpeg).
+Skips files that have already been converted.
+
+Options:
+  --quality N    Quality (default: 1)
+  --help         Show this help message and exit.
+EOF
+}
+
+# Handle Ctrl-C (SIGINT) and SIGTERM
+cleanup() {
+  echo -e "\nAborted by user. Exiting..."
+  exit 130
+}
+
+trap cleanup SIGINT SIGTERM
+
+# Defaults
+quality=1
+
+# Parse arguments
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --quality)
+      shift
+      if [[ "$1" =~ ^[0-9]+$ ]]; then
+        compression_level="$1"
+      else
+        echo "Error: --quality requires a numeric argument." >&2
+        exit 1
+      fi
+      ;;
+    --help)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      show_help
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+# Find TIFF files
+shopt -s nullglob
+files=( *.tif *.tiff )
+total=${#files[@]}
+
+if [[ "$total" -eq 0 ]]; then
+  echo "No .tif or .tiff files found in the current directory."
+  exit 0
+fi
+
+# Process files serially
+count=0
+for input in "${files[@]}"; do
+  ((count++))
+  output="${input%.*}.jpeg"
+
+  if [[ -f "$output" ]]; then
+    echo "[$count/$total] Skipping $input (already converted)"
+    continue
+  fi
+
+  echo "[$count/$total] Converting $input → $output"
+  ffmpeg -y -i "$input" -q:v $quality -compression_level 100 "$output"
+
+  # Copy EXIF metadata (if tool is available)
+  if command -v exiftool >/dev/null; then
+    exiftool -TagsFromFile "$input" "-all:all>all:all" "$output" -overwrite_original
+  else
+    echo "Warning: exiftool not found; metadata not preserved for $output"
+  fi
+done

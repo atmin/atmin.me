@@ -31,7 +31,7 @@ done
 # Parallel arrays for resolution and output filenames
 resolutions=("16384x8192" "8192x4096" "4096x2048" "2048x1024")
 filenames=("16k.avif" "8k.avif" "4k.avif" "2k.avif")
-crfs=("24" "30" "36" "42")
+crfs=("32" "36" "40" "44")
 
 # Convert loop
 for i in "${!resolutions[@]}"; do
@@ -48,8 +48,13 @@ for i in "${!resolutions[@]}"; do
   fi
 
   # https://trac.ffmpeg.org/wiki/Encode/AV1
-  ffmpeg -y -i "$input" \
-    $vf_arg \
-    -c:v libaom-av1 -crf $crf -b:v 0 -still-picture \
-    "$output"
+  echo ffmpeg -y -i "$input" $vf_arg -c:v libaom-av1 -crf $crf -b:v 0 -still-picture 1 "$output"
+  ffmpeg -y -i "$input" $vf_arg -c:v libaom-av1 -crf $crf -b:v 0 -still-picture 1 "$output"
+
+  # Copy EXIF metadata (if tool is available)
+  if command -v exiftool >/dev/null; then
+    exiftool -TagsFromFile "$input" "-all:all>all:all" "$output" -overwrite_original
+  else
+    echo "Warning: exiftool not found; metadata not preserved for $output"
+  fi
 done

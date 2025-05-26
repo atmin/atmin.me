@@ -381,38 +381,46 @@ export default class Pano extends HTMLElement {
         console.log('[pan-oh] src=', sources);
         if (sources.length === 0) return;
 
+        this.renderLoop();
+
         const { gl } = this;
-        console.log(
-            '[pan-oh] WebGL max texture size:',
-            gl.getParameter(gl.MAX_TEXTURE_SIZE)
-        );
+        const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        console.log('[pan-oh] WebGL max texture size:', maxTextureSize);
         console.log('[pan-oh] WebGL renderer:', gl.getParameter(gl.RENDERER));
 
-        const onLowestResolutionLoaded = (image: HTMLImageElement) => {
-            bindTexture(this.gl, this.texture, image);
-            this.renderLoop();
-            console.log('[pan-oh] dispatch textureLoaded');
-            this.dispatchEvent(new CustomEvent('textureLoaded'));
-        };
-
-        const sequantiallyLoadHigherResolutions = () => {
-            sources.slice(1).reduce(
-                (chain, src) =>
-                    chain.then(() =>
-                        loadImage(src).then((image) => {
+        sources.reduce(
+            (chain, src) =>
+                chain.then(() =>
+                    loadImage(src).then((image) => {
+                        if (
+                            image.width <= maxTextureSize &&
+                            image.height <= maxTextureSize
+                        ) {
                             this.afterAnimationCallback = () => {
                                 bindTexture(this.gl, this.texture, image);
+                                console.log('[pan-oh] dispatch textureLoaded');
+                                this.dispatchEvent(
+                                    new CustomEvent<{
+                                        width: number;
+                                        height: number;
+                                    }>('textureLoaded', {
+                                        detail: {
+                                            width: image.width,
+                                            height: image.height,
+                                        },
+                                    })
+                                );
                             };
                             this.forceRender();
-                        })
-                    ),
-                Promise.resolve()
-            );
-        };
-
-        loadImage(sources[0])
-            .then(onLowestResolutionLoaded)
-            .then(sequantiallyLoadHigherResolutions);
+                        } else {
+                            console.warn(
+                                '[pan-oh] image dimension exceeds gl.MAX_TEXTURE_SIZE'
+                            );
+                        }
+                    })
+                ),
+            Promise.resolve()
+        );
     }
 
     private resize() {

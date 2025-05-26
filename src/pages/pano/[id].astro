@@ -50,10 +50,14 @@ const src = `${(await loResSrc(id)).default.src} ${(await hiResSrc(id)).default.
 <script is:inline>
     document.addEventListener('DOMContentLoaded', () => {
         const pano = document.getElementById('panorama');
-        pano.addEventListener('textureLoaded', () => {
-            setTimeout(() => {
-                pano.animateTo(pano.yaw, 0, 2, 3000);
-            }, 200);
-        });
+        pano.addEventListener(
+            'textureLoaded',
+            () => {
+                setTimeout(() => {
+                    pano.animateTo(pano.yaw, 0, 2, 3000);
+                }, 200);
+            },
+            { once: true }
+        );
     });
 </script>

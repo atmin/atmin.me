@@ -73,4 +73,11 @@ for input in "${files[@]}"; do
 
   echo "[$count/$total] Converting $input → $output"
   ffmpeg -y -i "$input" -c:v libjxl -distance "$compression_level" "$output"
+
+  # Copy EXIF metadata (if tool is available)
+  if command -v exiftool >/dev/null; then
+    exiftool -TagsFromFile "$input" "-all:all>all:all" "$output" -overwrite_original
+  else
+    echo "Warning: exiftool not found; metadata not preserved for $output"
+  fi
 done

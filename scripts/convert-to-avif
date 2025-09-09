@@ -31,7 +31,7 @@ done
 # Parallel arrays for resolution and output filenames
 resolutions=("16384x8192" "8192x4096" "4096x2048" "2048x1024")
 filenames=("16k.avif" "8k.avif" "4k.avif" "2k.avif")
-crfs=("32" "36" "40" "44")
+crfs=("32" "36" "40" "44", "44")
 
 # Convert loop
 for i in "${!resolutions[@]}"; do
